@@ -1,0 +1,391 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>UAV Wing Designer & Optimizer</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body {
+            background-color: #121214;
+            color: #e2e8f0;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        }
+        .sidebar {
+            background-color: #1a1a1e;
+            border-right: 1px solid #2d2d34;
+            height: 100vh;
+            overflow-y: auto;
+            padding: 20px;
+        }
+        .main-content {
+            height: 100vh;
+            position: relative;
+        }
+        #canvas-container {
+            width: 100%;
+            height: 100%;
+            background-color: #0b0b0c;
+        }
+        .dark-theme-card {
+            background-color: #1a1a1e;
+            border: 1px solid #2d2d34;
+            color: #e2e8f0;
+        }
+        .card-header {
+            border-bottom: 1px solid #2d2d34;
+            background-color: #222227;
+        }
+        .form-label {
+            font-size: 0.85rem;
+            color: #94a3b8;
+            margin-bottom: 0.25rem;
+        }
+        .badge-custom {
+            background-color: #2d2d34;
+            color: #38bdf8;
+            border: 1px solid #38bdf8;
+        }
+        blockquote {
+            border-left: 4px solid #38bdf8;
+            background-color: #222227;
+            padding: 10px;
+            font-size: 0.9rem;
+            border-radius: 4px;
+        }
+        .score-circle {
+            width: 80px;
+            height: 80px;
+            border-radius: 50%;
+            border: 4px solid #10b981;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5rem;
+            font-weight: bold;
+            margin: 0 auto;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container-fluid m-0 p-0">
+    <div class="row g-0">
+        <div class="col-md-3 sidebar">
+            <h5 class="mb-3 text-info">✈ UAV Wing Designer</h5>
+            <hr class="text-secondary">
+
+            <h6 class="text-uppercase text-muted tracking-wider small mb-3">Mission Constraints</h6>
+            <div class="mb-3">
+                <label for="payload_kg" class="form-label">Payload: <span id="payload_val">2.0</span> kg</label>
+                <input type="range" class="form-range" id="payload_kg" min="0.1" max="5.0" step="0.1" value="2.0" oninput="document.getElementById('payload_val').innerText = this.value">
+            </div>
+            <div class="mb-3">
+                <label for="battery_wh" class="form-label">Battery: <span id="battery_val">310</span> Wh</label>
+                <input type="range" class="form-range" id="battery_wh" min="50" max="1000" step="10" value="310" oninput="document.getElementById('battery_val').innerText = this.value">
+            </div>
+            <div class="mb-3">
+                <label for="max_span_m" class="form-label">Max Wingspan: <span id="max_span_val">2.7</span> m</label>
+                <input type="range" class="form-range" id="max_span_m" min="0.5" max="5.0" step="0.1" value="2.7" oninput="document.getElementById('max_span_val').innerText = this.value">
+            </div>
+            <div class="mb-3">
+                <label for="cruise_ms" class="form-label">Cruise Speed: <span id="cruise_val">16.0</span> m/s</label>
+                <input type="range" class="form-range" id="cruise_ms" min="10" max="40" step="0.5" value="16.0" oninput="document.getElementById('cruise_val').innerText = this.value">
+            </div>
+            <div class="mb-3 d-none">
+                <input type="hidden" id="mission_km" value="55">
+                <input type="hidden" id="endurance_hr" value="2.0">
+            </div>
+
+            <hr class="text-secondary">
+            <h6 class="text-uppercase text-muted tracking-wider small mb-3">Wing Geometry Preview</h6>
+            
+            <div class="mb-3">
+                <label for="wingspan" class="form-label">Wingspan: <span id="span_val">2.18</span> m</label>
+                <input type="range" class="form-range" id="wingspan" min="0.5" max="4.0" step="0.01" value="2.18" oninput="document.getElementById('span_val').innerText = this.value; evaluateGeometry();">
+            </div>
+            <div class="mb-3">
+                <label for="aspect_ratio" class="form-label">Aspect Ratio: <span id="ar_val">8.4</span></label>
+                <input type="range" class="form-range" id="aspect_ratio" min="4" max="20" step="0.1" value="8.4" oninput="document.getElementById('ar_val').innerText = this.value; evaluateGeometry();">
+            </div>
+            <div class="mb-3">
+                <label for="taper_ratio" class="form-label">Taper Ratio: <span id="taper_val">0.88</span></label>
+                <input type="range" class="form-range" id="taper_ratio" min="0.1" max="1.0" step="0.01" value="0.88" oninput="document.getElementById('taper_val').innerText = this.value; evaluateGeometry();">
+            </div>
+            <div class="mb-3">
+                <label for="t_c_ratio" class="form-label">Thickness (t/c): <span id="tc_val">12.0</span> %</label>
+                <input type="range" class="form-range" id="t_c_ratio" min="6" max="20" step="0.5" value="12.0" oninput="document.getElementById('tc_val').innerText = this.value; evaluateGeometry();">
+            </div>
+            <div class="mb-3">
+                <label for="twist_deg" class="form-label">Aerodynamic Twist: <span id="twist_val">0.0</span>°</label>
+                <input type="range" class="form-range" id="twist_deg" min="0.0" max="7.0" step="0.5" value="0.0" oninput="document.getElementById('twist_val').innerText = this.value; evaluateGeometry();">
+            </div>
+            <div class="form-check form-switch mb-4">
+                <input class="form-check-input" type="checkbox" id="winglet_pres" onchange="evaluateGeometry();">
+                <label class="form-check-label text-muted small" for="winglet_pres">Install Winglets (Vortex Reduction)</label>
+            </div>
+            <div class="form-check form-switch mb-4">
+                <input class="form-check-input" type="checkbox" id="flying_wing" onchange="evaluateGeometry();">
+                <label class="form-check-label text-muted small" for="flying_wing">Flying Wing Layout</label>
+            </div>
+
+            <button class="btn btn-primary w-100 mb-2" onclick="optimizeWing();">⚡ Optimize Wing Shape</button>
+            <button class="btn btn-outline-secondary w-100 text-light" onclick="evaluateGeometry();">Evaluate Settings</button>
+        </div>
+
+        <div class="col-md-9 main-content">
+            <div id="canvas-container"></div>
+
+            <div class="position-absolute top-0 end-0 p-3 m-2 col-md-4" style="z-index: 10; max-height: 95vh; overflow-y: auto;">
+                <div class="card dark-theme-card shadow-lg mb-3">
+                    <div class="card-body text-center py-3">
+                        <div class="score-circle mb-1" id="metric-score">-</div>
+                        <div class="small text-muted">Design Performance Score</div>
+                    </div>
+                </div>
+
+                <div class="card dark-theme-card shadow-lg mb-3">
+                    <div class="card-header py-2"><h6 class="m-0 text-info">📊 Performance Outputs</h6></div>
+                    <div class="card-body py-2 small">
+                        <div class="d-flex justify-content-between my-1"><span>Glide Ratio (L/D):</span><strong id="metric-ld">-</strong></div>
+                        <div class="d-flex justify-content-between my-1"><span>Expected Range:</span><strong id="metric-range">-</strong></div>
+                        <div class="d-flex justify-content-between my-1"><span>Flight Endurance:</span><strong id="metric-endurance">-</strong></div>
+                        <div class="d-flex justify-content-between my-1"><span>Stall Speed:</span><strong id="metric-stall">-</strong></div>
+                        <div class="d-flex justify-content-between my-1"><span>Total Lift/Weight:</span><strong id="metric-weight">-</strong></div>
+                        <div class="d-flex justify-content-between my-1"><span>Structural Safety Factor:</span><strong id="metric-safety">-</strong></div>
+                        <div class="d-flex justify-content-between mt-2 pt-2 border-top"><span>Selected Airfoil profile:</span><span class="badge badge-custom" id="metric-airfoil">-</span></div>
+                    </div>
+                </div>
+
+                <div class="card dark-theme-card shadow-lg">
+                    <div class="card-header py-2"><h6 class="m-0 text-warning">🔨 Real-World Fabrication Guide</h6></div>
+                    <div class="card-body small">
+                        <div class="mb-2">
+                            <strong>1. Carbon Tube Spar Core:</strong>
+                            <div class="text-muted">Cut your primary rigid carbon tube spar to precisely <span class="text-light font-monospace" id="build-spar-len">-</span> mm. Center it along the 25% wing chord line.</div>
+                        </div>
+                        <div class="mb-2">
+                            <strong>2. Airfoil Rib Dimensions:</strong>
+                            <ul>
+                                <li>Root Profile Template: Cut at a chord depth of <span class="text-light font-monospace" id="build-root-chord">-</span> mm.</li>
+                                <li>Tip Profile Template: Cut at a chord depth of <span class="text-light font-monospace" id="build-tip-chord">-</span> mm.</li>
+                            </ul>
+                        </div>
+                        <div class="mb-2">
+                            <strong>3. Structural Washout Jig:</strong>
+                            <div class="text-muted">To implement the calculated <span class="text-info" id="build-twist-deg">-</span>° twist template: slide a physical shim block measuring exactly <span class="text-warning font-monospace" id="build-washout-height">-</span> mm high underneath the trailing edge of the outermost tip rib before sealing the wing skin.</div>
+                        </div>
+                        <div>
+                            <strong>4. Tip Vortex Matrix:</strong>
+                            <div class="text-muted" id="build-winglet-instructions">Awaiting optimization parameters...</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+
+<script>
+    // ── THREE.JS BACKGROUND VIEWPORT INTEGRATION ────────────────────────────
+    let scene, camera, renderer, controls, wingMesh;
+    const container = document.getElementById('canvas-container');
+
+    function init3D() {
+        scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x0b0b0c);
+
+        camera = new THREE.PerspectiveCamera(45, container.clientWidth / container.clientHeight, 0.1, 100);
+        camera.position.set(0, 2, 4);
+
+        renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(container.clientWidth, container.clientHeight);
+        container.appendChild(renderer.domElement);
+
+        controls = new THREE.OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.dampingFactor = 0.05;
+
+        // Visual Environment Lights
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.4);
+        scene.add(ambientLight);
+        const dirLight1 = new THREE.DirectionLight(0xffffff, 0.8);
+        dirLight1.position.set(5, 10, 7);
+        scene.add(dirLight1);
+        const dirLight2 = new THREE.DirectionLight(0x38bdf8, 0.3);
+        dirLight2.position.set(-5, -5, -5);
+        scene.add(dirLight2);
+
+        // Visual Ground Matrix Grid
+        const grid = new THREE.GridHelper(10, 20, 0x2d2d34, 0x1a1a1e);
+        grid.position.y = -0.5;
+        scene.add(grid);
+
+        window.addEventListener('resize', onWindowResize);
+        animate();
+    }
+
+    function animate() {
+        requestAnimationFrame(animate);
+        controls.update();
+        renderer.render(scene, camera);
+    }
+
+    function onWindowResize() {
+        camera.aspect = container.clientWidth / container.clientHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(container.clientWidth, container.clientHeight);
+    }
+
+    // Generates a simple visual 3D wing representation based on coordinates
+    function updateWingMesh(span, rootChord, tipChord, tc, twist, hasWinglets) {
+        if (wingMesh) scene.remove(wingMesh);
+
+        const group = new THREE.Group();
+        const material = new THREE.MeshStandardMaterial({ color: 0x1e40af, roughness: 0.2, metalness: 0.1, wireframe: false });
+        const thickness = rootChord * tc;
+
+        // Symmetric Wing Mesh Box Wrapper
+        const halfSpan = span / 2;
+        const geom = new THREE.BufferGeometry();
+        
+        // Simulating simplified wing coordinates for preview
+        const vertices = new Float32Array([
+            0, thickness/2, 0,                      halfSpan, (tipChord*tc)/2, -Math.sin(twist*Math.PI/180)*tipChord,
+            0, -thickness/2, 0,                     halfSpan, -(tipChord*tc)/2, -Math.sin(twist*Math.PI/180)*tipChord,
+            -rootChord, 0, 0,                       -tipChord, 0, 0,
+            0, thickness/2, 0,                      -halfSpan, (tipChord*tc)/2, -Math.sin(twist*Math.PI/180)*tipChord,
+            0, -thickness/2, 0,                     -halfSpan, -(tipChord*tc)/2, -Math.sin(twist*Math.PI/180)*tipChord,
+        ]);
+        
+        const positionAttribute = new THREE.BufferAttribute(vertices, 3);
+        geom.setAttribute('position', positionAttribute);
+        
+        const meshLeft = new THREE.Mesh(new THREE.BoxGeometry(halfSpan, thickness, rootChord), material);
+        meshLeft.position.set(halfSpan/2, 0, -rootChord/4);
+        group.add(meshLeft);
+
+        const meshRight = new THREE.Mesh(new THREE.BoxGeometry(halfSpan, thickness, rootChord), material);
+        meshRight.position.set(-halfSpan/2, 0, -rootChord/4);
+        group.add(meshRight);
+
+        // Visual Winglets Mockup
+        if (hasWinglets > 0.5) {
+            const wGeom = new THREE.BoxGeometry(0.02, tipChord, tipChord * 0.4);
+            const wMat = new THREE.MeshStandardMaterial({ color: 0x38bdf8 });
+            
+            const wLeft = new THREE.Mesh(wGeom, wMat);
+            wLeft.position.set(halfSpan, tipChord/3, -rootChord/3);
+            group.add(wLeft);
+
+            const wRight = new THREE.Mesh(wGeom, wMat);
+            wRight.position.set(-halfSpan, tipChord/3, -rootChord/3);
+            group.add(wRight);
+        }
+
+        wingMesh = group;
+        scene.add(wingMesh);
+    }
+
+    // ── SERVER ROUTE COMMUNICATION DATA PACKER ──────────────────────────────
+    function getFormPayload() {
+        return {
+            payload_kg:   parseFloat(document.getElementById('payload_kg').value),
+            battery_wh:   parseFloat(document.getElementById('battery_wh').value),
+            max_span_m:   parseFloat(document.getElementById('max_span_m').value),
+            cruise_ms:    parseFloat(document.getElementById('cruise_ms').value),
+            mission_km:   parseFloat(document.getElementById('mission_km').value),
+            endurance_hr: parseFloat(document.getElementById('endurance_hr').value),
+            flying_wing:  document.getElementById('flying_wing').checked,
+            
+            wingspan:     parseFloat(document.getElementById('wingspan').value),
+            aspect_ratio: parseFloat(document.getElementById('aspect_ratio').value),
+            taper_ratio:  parseFloat(document.getElementById('taper_ratio').value),
+            t_c_ratio:    parseFloat(document.getElementById('t_c_ratio').value) / 100.0,
+            
+            // Advanced parameters correctly tracked to backend
+            twist_deg:    parseFloat(document.getElementById('twist_deg').value),
+            winglet_pres: document.getElementById('winglet_pres').checked ? 1.0 : 0.0
+        };
+    }
+
+    function updateUIElements(res) {
+        // Core performance metrics cards
+        document.getElementById('metric-score').innerText = res.score.toFixed(1);
+        document.getElementById('metric-ld').innerText = res.ld.toFixed(2);
+        document.getElementById('metric-range').innerText = res.range_km.toFixed(1) + " km";
+        document.getElementById('metric-endurance').innerText = res.endurance.toFixed(2) + " hours";
+        document.getElementById('metric-stall').innerText = res.stall_speed.toFixed(2) + " m/s";
+        document.getElementById('metric-weight').innerText = res.mass_total.toFixed(3) + " kg (" + res.weight.toFixed(1) + " N)";
+        document.getElementById('metric-safety').innerText = res.safety.toFixed(2);
+        document.getElementById('metric-airfoil').innerText = res.airfoil;
+
+        // Core fabrication specs guide
+        document.getElementById('build-spar-len').innerText = res.construction_guide.spar_length_mm;
+        document.getElementById('build-root-chord').innerText = res.construction_guide.root_chord_mm;
+        document.getElementById('build-tip-chord').innerText = res.construction_guide.tip_chord_mm;
+        document.getElementById('build-twist-deg').innerText = res.twist_deg.toFixed(1);
+        document.getElementById('build-washout-height').innerText = res.construction_guide.washout_height_mm;
+
+        const wText = document.getElementById('build-winglet-instructions');
+        if (res.winglet_pres > 0.5) {
+            wText.innerHTML = "<strong>Winglets Recommended:</strong> Fabricate vertical aerodynamic endplates from balsa. Extend them upward by 15% of tip chord depth to limit high-speed wingtip vortex drag loops.";
+        } else {
+            wText.innerHTML = "<strong>No Winglets Needed:</strong> The optimizer concluded parasitical surface friction of winglet material adds more drag than vortex mitigation saves at this velocity. Keep tip templates clean.";
+        }
+
+        // Draw structural 3D changes
+        updateWingMesh(res.wingspan, res.root_chord, res.tip_chord, res.t_c, res.twist_deg, res.winglet_pres);
+    }
+
+    function evaluateGeometry() {
+        fetch('/evaluate', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(getFormPayload())
+        })
+        .then(r => r.json())
+        .then(data => {
+            if (data.ok) updateUIElements(data.result);
+            else alert("Evaluation Failure: " + data.error);
+        });
+    }
+
+    function optimizeWing() {
+        fetch('/optimize', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(getFormPayload())
+        })
+        .then(r => r.json())
+        .then(data => {
+            if (data.ok) {
+                // Update side selectors with values found by math algorithm matrix
+                document.getElementById('wingspan').value = data.result.wingspan.toFixed(2);
+                document.getElementById('span_val').innerText = data.result.wingspan.toFixed(2);
+                document.getElementById('aspect_ratio').value = data.result.aspect_ratio.toFixed(1);
+                document.getElementById('ar_val').innerText = data.result.aspect_ratio.toFixed(1);
+                document.getElementById('taper_ratio').value = data.result.taper_ratio.toFixed(2);
+                document.getElementById('taper_val').innerText = data.result.taper_ratio.toFixed(2);
+                document.getElementById('t_c_ratio').value = (data.result.t_c * 100).toFixed(1);
+                document.getElementById('tc_val').innerText = (data.result.t_c * 100).toFixed(1);
+                document.getElementById('twist_deg').value = data.result.twist_deg.toFixed(1);
+                document.getElementById('twist_val').innerText = data.result.twist_deg.toFixed(1);
+                document.getElementById('winglet_pres').checked = data.result.winglet_pres > 0.5;
+
+                updateUIElements(data.result);
+            } else {
+                alert("Optimization matrix failed: " + data.error);
+            }
+        });
+    }
+
+    // Initialize Viewport on page load
+    init3D();
+    evaluateGeometry();
+</script>
+</body>
+</html>
