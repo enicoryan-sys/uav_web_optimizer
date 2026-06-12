@@ -1,53 +1,469 @@
 <!DOCTYPE html>
-<html>
+<html lang="en" data-theme="dark">
 <head>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-</head>
-<body class="bg-slate-900 text-white h-screen flex">
-    <div class="w-1/3 p-8 border-r border-slate-700">
-        <h1 class="text-3xl font-bold mb-6">UAV Optimizer</h1>
-        <div class="space-y-4">
-            <input type="number" id="payload" value="2.0" class="w-full p-2 bg-slate-800 rounded">
-            <button onclick="optimize()" class="w-full bg-blue-600 p-3 rounded font-bold">RUN OPTIMIZATION</button>
-        </div>
-        <div id="out" class="mt-8 bg-slate-800 p-4 rounded text-sm"></div>
-    </div>
-    <div id="view" class="w-2/3"></div>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>UAV Design Optimizer</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300..700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+:root,[data-theme="light"]{
+  --bg:#f5f5f4;--surface:#ffffff;--surface-2:#f9f9f8;--surface-3:#f0efed;
+  --border:rgba(0,0,0,.09);--divider:rgba(0,0,0,.06);
+  --text:#1a1917;--muted:#6b6a67;--faint:#b0afab;
+  --accent:#0ea5a0;--accent-h:#0c8480;--accent-hl:rgba(14,165,160,.12);
+  --warn:#d97706;--err:#dc2626;--ok:#16a34a;
+  --font:'Inter',system-ui,sans-serif;--mono:'JetBrains Mono',monospace;
+  --r-sm:4px;--r-md:8px;--r-lg:12px;--r-xl:16px;
+  --sh-sm:0 1px 3px rgba(0,0,0,.06);--sh-md:0 4px 16px rgba(0,0,0,.08);--sh-lg:0 12px 40px rgba(0,0,0,.12);
+  --tr:180ms cubic-bezier(.16,1,.3,1);
+}
+[data-theme="dark"]{
+  --bg:#0f0f0e;--surface:#161614;--surface-2:#1c1c1a;--surface-3:#232320;
+  --border:rgba(255,255,255,.08);--divider:rgba(255,255,255,.05);
+  --text:#e8e6e3;--muted:#908e8a;--faint:#4a4946;
+  --accent:#2dd4bf;--accent-h:#14b8a6;--accent-hl:rgba(45,212,191,.1);
+  --warn:#fbbf24;--err:#f87171;--ok:#4ade80;
+  --sh-sm:0 1px 3px rgba(0,0,0,.3);--sh-md:0 4px 16px rgba(0,0,0,.4);--sh-lg:0 12px 40px rgba(0,0,0,.5);
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;-webkit-font-smoothing:antialiased}
+body{font-family:var(--font);font-size:14px;color:var(--text);background:var(--bg);display:grid;grid-template-columns:280px 1fr;grid-template-rows:52px 1fr;height:100dvh;overflow:hidden}
+button{cursor:pointer;background:none;border:none;font:inherit;color:inherit}
+input,select{font:inherit;color:inherit}
 
-    <script>
-        const scene = new THREE.Scene();
-        const camera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 1000);
-        const renderer = new THREE.WebGLRenderer();
-        renderer.setSize(document.getElementById('view').clientWidth, window.innerHeight);
-        document.getElementById('view').appendChild(renderer.domElement);
-        
-        let wing;
-        function updateWing(w, root, tip) {
-            if(wing) scene.remove(wing);
-            const geo = new THREE.BufferGeometry();
-            const verts = new Float32Array([0,0,0, root,0,0, w/2,0,tip, root+w/2,0,tip]);
-            geo.setAttribute('position', new THREE.BufferAttribute(verts, 3));
-            wing = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({color: 0x00ff00, side: 2}));
-            scene.add(wing);
-        }
-        
-        async function optimize() {
-            const res = await fetch('/api/optimize', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({payload: document.getElementById('payload').value})
-            });
-            const json = await res.json();
-            if(json.status === 'success') {
-                const d = json.data;
-                document.getElementById('out').innerText = `Score: ${d.score.toFixed(2)} | Span: ${d.wingspan.toFixed(2)}m`;
-                updateWing(d.wingspan, d.root_chord, d.tip_chord);
-            }
-        }
-        camera.position.z = 5;
-        function animate() { requestAnimationFrame(animate); renderer.render(scene, camera); }
-        animate();
-    </script>
+header{grid-column:1/-1;grid-row:1;display:flex;align-items:center;padding:0 20px;gap:12px;background:var(--surface);border-bottom:1px solid var(--border);z-index:20}
+.logo{display:flex;align-items:center;gap:10px;font-weight:600;font-size:15px;letter-spacing:-.3px}
+header .spacer{flex:1}
+.badge{font-size:11px;font-weight:600;letter-spacing:.04em;padding:2px 8px;border-radius:99px;background:var(--accent-hl);color:var(--accent);border:1px solid currentColor;opacity:.8}
+#themeToggle{width:34px;height:34px;border-radius:var(--r-md);display:flex;align-items:center;justify-content:center;color:var(--muted);transition:background var(--tr),color var(--tr)}
+#themeToggle:hover{background:var(--surface-3);color:var(--text)}
+
+aside{grid-column:1;grid-row:2;overflow-y:auto;background:var(--surface);border-right:1px solid var(--border);display:flex;flex-direction:column;padding:16px}
+.sidebar-section{margin-bottom:20px}
+.sidebar-section-label{font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--faint);margin-bottom:10px;padding:0 2px}
+.field{display:flex;flex-direction:column;gap:5px;margin-bottom:12px}
+.field label{font-size:12px;font-weight:500;color:var(--muted)}
+.field-row{display:grid;grid-template-columns:1fr auto;gap:6px;align-items:center}
+.field input,.field select{width:100%;padding:7px 10px;background:var(--surface-3);border:1px solid var(--border);border-radius:var(--r-md);font-size:13px;color:var(--text);transition:border-color var(--tr),box-shadow var(--tr);outline:none}
+.field input:focus,.field select:focus{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-hl)}
+.field .unit{font-size:11px;color:var(--faint);font-family:var(--mono);white-space:nowrap;padding:7px 8px;background:var(--surface-3);border:1px solid var(--border);border-radius:var(--r-md)}
+.toggle-row{display:flex;align-items:center;justify-content:space-between;padding:6px 0}
+.toggle-label{font-size:12px;font-weight:500;color:var(--muted)}
+.toggle{position:relative;width:36px;height:20px}
+.toggle input{opacity:0;width:0;height:0}
+.toggle-slider{position:absolute;inset:0;border-radius:99px;background:var(--surface-3);border:1px solid var(--border);cursor:pointer;transition:background var(--tr)}
+.toggle-slider::before{content:'';position:absolute;width:14px;height:14px;left:2px;top:2px;border-radius:50%;background:var(--muted);transition:transform var(--tr),background var(--tr)}
+.toggle input:checked+.toggle-slider{background:var(--accent-hl);border-color:var(--accent)}
+.toggle input:checked+.toggle-slider::before{transform:translateX(16px);background:var(--accent)}
+.btn-optimize{width:100%;padding:11px;background:var(--accent);color:#fff;border-radius:var(--r-lg);font-size:14px;font-weight:600;transition:background var(--tr),box-shadow var(--tr),transform var(--tr);margin-top:4px;display:flex;align-items:center;justify-content:center;gap:8px}
+.btn-optimize:hover{background:var(--accent-h);box-shadow:var(--sh-md)}
+.btn-optimize:active{transform:scale(.98)}
+.btn-optimize:disabled{opacity:.5;cursor:not-allowed;transform:none}
+.btn-optimize .spinner{width:16px;height:16px;border:2px solid rgba(255,255,255,.3);border-top-color:#fff;border-radius:50%;animation:spin .7s linear infinite;display:none}
+.btn-optimize.loading .spinner{display:block}
+.btn-optimize.loading .btn-text{display:none}
+@keyframes spin{to{transform:rotate(360deg)}}
+.sidebar-footer{margin-top:auto;padding-top:16px;border-top:1px solid var(--divider);font-size:11px;color:var(--faint);line-height:1.6}
+
+main{grid-column:2;grid-row:2;overflow-y:auto;padding:24px;display:flex;flex-direction:column;gap:20px}
+.kpi-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px}
+.kpi{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);padding:14px 16px;box-shadow:var(--sh-sm);transition:box-shadow var(--tr)}
+.kpi:hover{box-shadow:var(--sh-md)}
+.kpi-label{font-size:11px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:var(--faint);margin-bottom:6px}
+.kpi-val{font-size:22px;font-weight:700;font-family:var(--mono);color:var(--text);letter-spacing:-.5px}
+.kpi-unit{font-size:12px;color:var(--muted);margin-top:2px}
+.kpi.score-card .kpi-val{color:var(--accent)}
+.section-title{font-size:12px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--faint);margin-bottom:12px}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-xl);padding:20px;box-shadow:var(--sh-sm)}
+.two-col{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.metrics-table{width:100%;border-collapse:collapse;font-size:13px}
+.metrics-table th{text-align:left;padding:6px 10px;font-size:11px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:var(--faint);border-bottom:1px solid var(--divider)}
+.metrics-table td{padding:9px 10px;border-bottom:1px solid var(--divider);font-variant-numeric:tabular-nums}
+.metrics-table tr:last-child td{border-bottom:none}
+.metrics-table td:last-child{text-align:right;font-family:var(--mono);font-size:12px;color:var(--accent)}
+.metrics-table td .tag{font-size:10px;background:var(--accent-hl);color:var(--accent);padding:2px 6px;border-radius:99px;font-weight:600;margin-left:6px}
+.wing-canvas-wrap{display:flex;align-items:center;justify-content:center;padding:16px 8px;min-height:180px}
+.chart-wrap{position:relative;height:220px}
+#emptyState{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;padding:60px 20px;text-align:center}
+#emptyState svg{color:var(--faint)}
+#emptyState h2{font-size:16px;font-weight:600;color:var(--text)}
+#emptyState p{font-size:13px;max-width:34ch;line-height:1.6;color:var(--muted)}
+#errorBanner{display:none;background:rgba(220,38,38,.08);border:1px solid rgba(220,38,38,.25);border-radius:var(--r-lg);padding:12px 16px;font-size:13px;color:var(--err)}
+#resultsWrap{display:none;flex-direction:column;gap:20px}
+::-webkit-scrollbar{width:6px;height:6px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">
+    <svg width="28" height="28" viewBox="0 0 28 28" fill="none" aria-label="UAV Optimizer">
+      <rect width="28" height="28" rx="7" fill="var(--accent)" opacity=".15"/>
+      <path d="M4 14h20M14 4l8 10-8 10M14 4L6 14l8 10" stroke="var(--accent)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+    </svg>
+    UAV Design Optimizer
+  </div>
+  <span class="badge">DE Algorithm</span>
+  <div class="spacer"></div>
+  <button id="themeToggle" aria-label="Toggle theme">
+    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+  </button>
+</header>
+
+<aside>
+  <div class="sidebar-section">
+    <div class="sidebar-section-label">Mission Requirements</div>
+    <div class="field">
+      <label for="f_payload">Payload</label>
+      <div class="field-row">
+        <input type="number" id="f_payload" value="2.0" min="0.1" max="20" step="0.1"/>
+        <span class="unit">kg</span>
+      </div>
+    </div>
+    <div class="field">
+      <label for="f_range">Mission Range</label>
+      <div class="field-row">
+        <input type="number" id="f_range" value="55" min="5" max="500" step="5"/>
+        <span class="unit">km</span>
+      </div>
+    </div>
+    <div class="field">
+      <label for="f_endurance">Endurance</label>
+      <div class="field-row">
+        <input type="number" id="f_endurance" value="2.0" min="0.25" max="12" step="0.25"/>
+        <span class="unit">hr</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="sidebar-section">
+    <div class="sidebar-section-label">Physical Constraints</div>
+    <div class="field">
+      <label for="f_max_span">Max Wingspan</label>
+      <div class="field-row">
+        <input type="number" id="f_max_span" value="2.7" min="0.5" max="12" step="0.1"/>
+        <span class="unit">m</span>
+      </div>
+    </div>
+    <div class="field">
+      <label for="f_battery">Battery Capacity</label>
+      <div class="field-row">
+        <input type="number" id="f_battery" value="310" min="50" max="5000" step="10"/>
+        <span class="unit">Wh</span>
+      </div>
+    </div>
+    <div class="field">
+      <label for="f_cruise">Cruise Speed</label>
+      <div class="field-row">
+        <input type="number" id="f_cruise" value="16" min="5" max="60" step="1"/>
+        <span class="unit">m/s</span>
+      </div>
+    </div>
+    <div class="toggle-row">
+      <span class="toggle-label">Flying Wing Config</span>
+      <label class="toggle">
+        <input type="checkbox" id="f_flying_wing"/>
+        <span class="toggle-slider"></span>
+      </label>
+    </div>
+  </div>
+
+  <button class="btn-optimize" id="optimizeBtn" onclick="runOptimize()">
+    <div class="spinner"></div>
+    <span class="btn-text">▶ Run Optimizer</span>
+  </button>
+
+  <div class="sidebar-footer">
+    Differential Evolution · scipy.optimize<br>
+    popsize=15 · maxiter=200 · polished
+  </div>
+</aside>
+
+<main>
+  <div id="errorBanner"></div>
+
+  <div id="emptyState">
+    <svg width="48" height="48" viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="1.5">
+      <path d="M6 24h36M24 6l14 18-14 18M24 6L10 24l14 18" stroke-linecap="round" stroke-linejoin="round"/>
+    </svg>
+    <h2>No design optimized yet</h2>
+    <p>Configure your mission requirements in the sidebar and click Run Optimizer.</p>
+  </div>
+
+  <div id="resultsWrap">
+    <div class="kpi-grid">
+      <div class="kpi score-card">
+        <div class="kpi-label">Optimizer Score</div>
+        <div class="kpi-val" id="kpi_score">—</div>
+        <div class="kpi-unit">out of 100</div>
+      </div>
+      <div class="kpi">
+        <div class="kpi-label">L/D Ratio</div>
+        <div class="kpi-val" id="kpi_ld">—</div>
+        <div class="kpi-unit">lift / drag</div>
+      </div>
+      <div class="kpi">
+        <div class="kpi-label">Est. Range</div>
+        <div class="kpi-val" id="kpi_range">—</div>
+        <div class="kpi-unit">km</div>
+      </div>
+      <div class="kpi">
+        <div class="kpi-label">Endurance</div>
+        <div class="kpi-val" id="kpi_endurance">—</div>
+        <div class="kpi-unit">hours</div>
+      </div>
+      <div class="kpi">
+        <div class="kpi-label">Total Mass</div>
+        <div class="kpi-val" id="kpi_mass">—</div>
+        <div class="kpi-unit">kg</div>
+      </div>
+      <div class="kpi">
+        <div class="kpi-label">Stall Speed</div>
+        <div class="kpi-val" id="kpi_stall">—</div>
+        <div class="kpi-unit">m/s</div>
+      </div>
+    </div>
+
+    <div class="two-col">
+      <div class="card">
+        <div class="section-title">Wing Planform (Top View)</div>
+        <div class="wing-canvas-wrap">
+          <canvas id="wingCanvas" width="340" height="160"></canvas>
+        </div>
+      </div>
+      <div class="card">
+        <div class="section-title">Performance Breakdown</div>
+        <div class="chart-wrap">
+          <canvas id="radarChart"></canvas>
+        </div>
+      </div>
+    </div>
+
+    <div class="two-col">
+      <div class="card">
+        <div class="section-title">Wing Geometry — Fabrication Specs</div>
+        <table class="metrics-table">
+          <thead><tr><th>Parameter</th><th>Value</th></tr></thead>
+          <tbody>
+            <tr><td>Wingspan <span class="tag">build</span></td><td id="t_wingspan">—</td></tr>
+            <tr><td>Root Chord <span class="tag">build</span></td><td id="t_root_chord">—</td></tr>
+            <tr><td>Tip Chord <span class="tag">build</span></td><td id="t_tip_chord">—</td></tr>
+            <tr><td>Wing Area</td><td id="t_wing_area">—</td></tr>
+            <tr><td>Aspect Ratio</td><td id="t_ar">—</td></tr>
+            <tr><td>Taper Ratio</td><td id="t_taper">—</td></tr>
+            <tr><td>Thickness/Chord</td><td id="t_tc">—</td></tr>
+            <tr><td>Twist (washout)</td><td id="t_twist">—</td></tr>
+            <tr><td>Winglets</td><td id="t_winglets">—</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="card">
+        <div class="section-title">Aerodynamic Properties</div>
+        <table class="metrics-table">
+          <thead><tr><th>Parameter</th><th>Value</th></tr></thead>
+          <tbody>
+            <tr><td>Lift-to-Drag Ratio</td><td id="a_ld">—</td></tr>
+            <tr><td>Parasite Drag (C_Do)</td><td id="a_cdo">—</td></tr>
+            <tr><td>Induced Drag (C_Di)</td><td id="a_cdi">—</td></tr>
+            <tr><td>Stall Speed</td><td id="a_stall">—</td></tr>
+            <tr><td>Est. Range</td><td id="a_range">—</td></tr>
+            <tr><td>Endurance</td><td id="a_endurance">—</td></tr>
+            <tr><td>Total Weight</td><td id="a_weight">—</td></tr>
+            <tr><td>Total Mass</td><td id="a_mass">—</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</main>
+
+<script>
+(function(){
+  const btn = document.getElementById('themeToggle');
+  let theme = 'dark';
+  const sun = `<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>`;
+  const moon = `<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>`;
+  btn.innerHTML = sun;
+  btn.addEventListener('click', () => {
+    theme = theme === 'dark' ? 'light' : 'dark';
+    document.documentElement.setAttribute('data-theme', theme);
+    btn.innerHTML = theme === 'dark' ? sun : moon;
+  });
+})();
+
+let radarInst = null;
+
+function drawWing(b, rootChord, tipChord) {
+  const cvs = document.getElementById('wingCanvas');
+  const ctx = cvs.getContext('2d');
+  const W = cvs.width, H = cvs.height;
+  ctx.clearRect(0, 0, W, H);
+  const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+  const accentColor = isDark ? '#2dd4bf' : '#0ea5a0';
+  const fillColor   = isDark ? 'rgba(45,212,191,.08)' : 'rgba(14,165,160,.07)';
+  const textColor   = isDark ? '#908e8a' : '#6b6a67';
+  const margin = 30;
+  const scale  = (W - 2*margin) / b;
+  const rc = rootChord * scale;
+  const tc = tipChord * scale;
+  const cx = W / 2, cy = H / 2;
+  const hs = (b / 2) * scale;
+  const sweepOffset = (rc - tc) * 0.25;
+  ctx.beginPath();
+  ctx.moveTo(cx - rc/2, cy - 10);
+  ctx.lineTo(cx - rc/2 - hs + sweepOffset, cy - 10 - hs*0.18);
+  ctx.lineTo(cx - rc/2 - hs + sweepOffset - tc + rc*0.05, cy - 10 - hs*0.18 + tc);
+  ctx.lineTo(cx + rc/2, cy - 10 + rc);
+  ctx.lineTo(cx + rc/2 + hs - sweepOffset - tc + rc*0.05, cy - 10 - hs*0.18 + tc);
+  ctx.lineTo(cx + rc/2 + hs - sweepOffset, cy - 10 - hs*0.18);
+  ctx.closePath();
+  ctx.fillStyle = fillColor;
+  ctx.fill();
+  ctx.strokeStyle = accentColor;
+  ctx.lineWidth = 1.5;
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.setLineDash([4,4]);
+  ctx.strokeStyle = accentColor;
+  ctx.globalAlpha = 0.4;
+  ctx.moveTo(cx - hs, cy - 10 - hs*0.18 + tc*0.25);
+  ctx.lineTo(cx + hs, cy - 10 - hs*0.18 + tc*0.25);
+  ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.globalAlpha = 1;
+  ctx.fillStyle = textColor;
+  ctx.font = '11px JetBrains Mono, monospace';
+  ctx.textAlign = 'center';
+  ctx.fillText('b = ' + b.toFixed(2) + ' m', cx, H - 8);
+  ctx.textAlign = 'left';
+  ctx.fillText('c_r=' + rootChord.toFixed(3) + 'm', 4, H - 8);
+  ctx.textAlign = 'right';
+  ctx.fillText('c_t=' + tipChord.toFixed(3) + 'm', W - 4, H - 8);
+}
+
+function animateVal(el, target, decimals) {
+  const start = parseFloat(el.dataset.val || 0);
+  const t0 = performance.now();
+  function step(now) {
+    const p = Math.min((now - t0) / 600, 1);
+    const ease = 1 - Math.pow(1-p, 3);
+    el.textContent = (start + (target - start)*ease).toFixed(decimals);
+    if (p < 1) requestAnimationFrame(step);
+    else el.dataset.val = target;
+  }
+  requestAnimationFrame(step);
+}
+
+async function runOptimize() {
+  const btn = document.getElementById('optimizeBtn');
+  const errBanner = document.getElementById('errorBanner');
+  errBanner.style.display = 'none';
+  btn.disabled = true;
+  btn.classList.add('loading');
+  try {
+    const resp = await fetch('/api/optimize', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({
+        payload:    parseFloat(document.getElementById('f_payload').value),
+        range:      parseFloat(document.getElementById('f_range').value),
+        endurance:  parseFloat(document.getElementById('f_endurance').value),
+        max_span:   parseFloat(document.getElementById('f_max_span').value),
+        battery:    parseFloat(document.getElementById('f_battery').value),
+        cruise_ms:  parseFloat(document.getElementById('f_cruise').value),
+        flying_wing: document.getElementById('f_flying_wing').checked
+      })
+    });
+    const json = await resp.json();
+    if (json.status !== 'success') throw new Error(json.message);
+    renderResults(json.data);
+  } catch(e) {
+    errBanner.textContent = '⚠ Optimizer error: ' + e.message;
+    errBanner.style.display = 'block';
+  } finally {
+    btn.disabled = false;
+    btn.classList.remove('loading');
+  }
+}
+
+function renderResults(d) {
+  document.getElementById('emptyState').style.display = 'none';
+  const rw = document.getElementById('resultsWrap');
+  rw.style.display = 'flex';
+
+  animateVal(document.getElementById('kpi_score'), d.score, 1);
+  animateVal(document.getElementById('kpi_ld'), d.ld, 2);
+  animateVal(document.getElementById('kpi_range'), d.range_km, 1);
+  animateVal(document.getElementById('kpi_endurance'), d.endurance_hr, 2);
+  animateVal(document.getElementById('kpi_mass'), d.mass_total, 3);
+  animateVal(document.getElementById('kpi_stall'), d.stall_speed, 2);
+
+  document.getElementById('t_wingspan').textContent   = d.wingspan.toFixed(4) + ' m';
+  document.getElementById('t_root_chord').textContent = d.root_chord.toFixed(4) + ' m';
+  document.getElementById('t_tip_chord').textContent  = d.tip_chord.toFixed(4) + ' m';
+  document.getElementById('t_wing_area').textContent  = d.wing_area.toFixed(4) + ' m²';
+  document.getElementById('t_ar').textContent         = d.aspect_ratio.toFixed(3);
+  document.getElementById('t_taper').textContent      = d.taper_ratio.toFixed(3);
+  document.getElementById('t_tc').textContent         = (d.t_c * 100).toFixed(1) + '%';
+  document.getElementById('t_twist').textContent      = d.twist_deg.toFixed(2) + '°';
+  document.getElementById('t_winglets').textContent   = d.winglet_pres > 0.5 ? 'Yes' : 'No';
+
+  document.getElementById('a_ld').textContent        = d.ld.toFixed(3);
+  document.getElementById('a_cdo').textContent       = d.C_Do.toFixed(5);
+  document.getElementById('a_cdi').textContent       = d.C_Di.toFixed(5);
+  document.getElementById('a_stall').textContent     = d.stall_speed.toFixed(2) + ' m/s';
+  document.getElementById('a_range').textContent     = d.range_km.toFixed(1) + ' km';
+  document.getElementById('a_endurance').textContent = d.endurance_hr.toFixed(3) + ' hr';
+  document.getElementById('a_weight').textContent    = d.weight_n.toFixed(2) + ' N';
+  document.getElementById('a_mass').textContent      = d.mass_total.toFixed(3) + ' kg';
+
+  drawWing(d.wingspan, d.root_chord, d.tip_chord);
+
+  const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+  const accent = isDark ? '#2dd4bf' : '#0ea5a0';
+  const gridCol = isDark ? 'rgba(255,255,255,.07)' : 'rgba(0,0,0,.07)';
+  const labelCol = isDark ? '#908e8a' : '#6b6a67';
+
+  if (radarInst) { radarInst.destroy(); radarInst = null; }
+  const rctx = document.getElementById('radarChart').getContext('2d');
+  radarInst = new Chart(rctx, {
+    type: 'radar',
+    data: {
+      labels: ['L/D', 'Score', 'Mass Eff.', 'Low Stall', 'Endurance'],
+      datasets: [{
+        data: [
+          Math.min(100,(d.ld/20)*100),
+          Math.min(100, d.score),
+          Math.max(0,100-(d.mass_total/10)*100),
+          Math.max(0,100-(d.stall_speed/30)*100),
+          Math.min(100,(d.endurance_hr/4)*100)
+        ],
+        fill: true,
+        backgroundColor: accent + '22',
+        borderColor: accent,
+        borderWidth: 2,
+        pointBackgroundColor: accent,
+        pointRadius: 4,
+      }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      scales: { r: {
+        min: 0, max: 100,
+        ticks: { display: false },
+        grid: { color: gridCol },
+        pointLabels: { color: labelCol, font: { size: 11, family: 'Inter' } },
+        angleLines: { color: gridCol },
+      }},
+      plugins: { legend: { display: false } }
+    }
+  });
+}
+</script>
 </body>
 </html>
