@@ -528,7 +528,7 @@ async function initThree() {
 
 function setupScene() {
   const { Scene, PerspectiveCamera, WebGLRenderer, AmbientLight, DirectionalLight,
-          GridHelper, Group, Color, Fog, OrbitControls, SphereGeometry, Mesh, MeshPhongMaterial } = window.THREE;
+          GridHelper, Group, Color, Fog, OrbitControls } = window.THREE;
 
   const canvas = document.getElementById('threeCanvas');
   const panel  = document.getElementById('viewerPanel');
@@ -563,10 +563,6 @@ function setupScene() {
   controls.enableDamping = true; controls.dampingFactor = 0.07;
   controls.minDistance = 0.2;    controls.maxDistance = 30;
   controls.target.set(0,0,0);    controls.update();
-
-  const testMesh = new Mesh(new SphereGeometry(0.15,16,16), new MeshPhongMaterial({color:0xff4444}));
-  testMesh.name = 'debugSphere';
-  scene.add(testMesh);
 
   const ro = new ResizeObserver(onResize);
   ro.observe(panel);
@@ -615,9 +611,6 @@ function buildUAV(d, airfoilKey, isFW) {
           CylinderGeometry, CircleGeometry, BoxGeometry, Vector2, Vector3, Box3, Matrix4 } = window.T;
   const DoubleSide = window.T.DoubleSide;
   if (!uavGroup) { console.error('uavGroup not ready'); return; }
-
-  const dbg = scene.getObjectByName('debugSphere');
-  if (dbg) scene.remove(dbg);
 
   const toRemove = [];
   uavGroup.traverse(c => { if (c !== uavGroup) toRemove.push(c); });
@@ -814,6 +807,7 @@ function animNum(el, target, dec) {
 
 // ── RENDER RESULTS ────────────────────────────────────────────────────────────
 function renderResults(d, ak, isFW, warns) {
+  if (!d || !d.wingspan) return;
   document.getElementById('emptyOverlay').classList.add('hidden');
   document.getElementById('viewerHud').style.display = 'flex';
   document.getElementById('viewerAirfoilWrap').style.display = 'flex';
