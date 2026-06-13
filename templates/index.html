@@ -602,7 +602,7 @@ function buildUAV(d, airfoilKey, isFW) {
     [gL,gR].forEach(g=>uavGroup.add(new LineSegments(new EdgesGeometry(g,25),edgeMat)));
   }
     // Winglets — root exactly matches wingtip cross-section
-  if((d.wingletpres||0)>0.5){
+  if(!isFW && (d.wingletpres||0)>0.5){
     [-1,1].forEach(sign=>{
       const wlH  = b * 0.07;
       const nW   = 20;
