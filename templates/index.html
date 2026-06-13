@@ -364,7 +364,6 @@ main{grid-column:2;grid-row:2;overflow:hidden;display:flex;flex-direction:column
 </main>
 
 <script>
-// ── AIRFOIL METADATA ──────────────────────────────────────────────────────────
 const AIRFOIL_META = {
   naca4412:  { name:'NACA 4412',   desc:'General purpose UAV, good all-rounder' },
   naca2412:  { name:'NACA 2412',   desc:'Low camber, good at higher speeds' },
@@ -384,7 +383,6 @@ function onAirfoilChange() {
   debounceFeasibility();
 }
 
-// ── THEME ─────────────────────────────────────────────────────────────────────
 (function() {
   const btn = document.getElementById('themeToggle');
   let theme = 'dark';
@@ -399,7 +397,6 @@ function onAirfoilChange() {
   });
 })();
 
-// ── TABS ──────────────────────────────────────────────────────────────────────
 function switchTab(id) {
   document.querySelectorAll('.tab-btn').forEach((b, i) =>
     b.classList.toggle('active', ['viewer','analytics'][i] === id));
@@ -408,7 +405,6 @@ function switchTab(id) {
   if (id === 'viewer') setTimeout(() => { onResize(); if (renderer && scene && camera) renderer.render(scene, camera); }, 80);
 }
 
-// ── FEASIBILITY ───────────────────────────────────────────────────────────────
 let feasTimer = null;
 function debounceFeasibility() {
   clearTimeout(feasTimer);
@@ -436,219 +432,163 @@ function showFeasibility(ok, warns, errs) {
 
 // ── AIRFOIL COORDINATES ───────────────────────────────────────────────────────
 const AIRFOILS = {};
-
-function naca4(m100, p10, t100, n=64) {
+function naca4(m100, p10, t100, n=48) {
   const m=m100/100, p=p10/10, t=t100/100;
-  const xs = []; for (let i=0;i<=n;i++) xs.push((1-Math.cos(Math.PI*i/n))/2);
-  const yt  = x => t/.2*( .2969*Math.sqrt(x) - .1260*x - .3516*x*x + .2843*x*x*x - .1015*x*x*x*x );
-  const yc  = x => x<p ? (m/(p*p))*(2*p*x-x*x) : (m/((1-p)*(1-p)))*(1-2*p+2*p*x-x*x);
-  const dyc = x => x<p ? (2*m/(p*p))*(p-x)      : (2*m/((1-p)*(1-p)))*(p-x);
-  const U=[], L=[];
-  for (let i=0;i<=n;i++) {
-    const x=xs[i], yT=yt(x), yC=yc(x), th=Math.atan(dyc(x));
-    U.push([x-yT*Math.sin(th), yC+yT*Math.cos(th)]);
-    L.push([x+yT*Math.sin(th), yC-yT*Math.cos(th)]);
-  }
-  return [...U, ...L.slice().reverse()];
-}
-AIRFOILS['naca4412'] = naca4(4,4,12); AIRFOILS['naca2412'] = naca4(2,4,12);
-AIRFOILS['naca0012'] = naca4(0,0,12); AIRFOILS['naca6409'] = naca4(6,4,9);
-AIRFOILS['naca4415'] = naca4(4,4,15);
-
-(function(){
-  const n=64,t=.12,r=.2208,xs=[];
-  for(let i=0;i<=n;i++) xs.push((1-Math.cos(Math.PI*i/n))/2);
+  const xs=[]; for(let i=0;i<=n;i++) xs.push((1-Math.cos(Math.PI*i/n))/2);
   const yt =x=>t/.2*(.2969*Math.sqrt(x)-.126*x-.3516*x*x+.2843*x*x*x-.1015*x*x*x*x);
-  const yc =x=>x<=r?.36*(x*x*x-3*r*x*x+r*r*(3-r)*x):.36*r*r*r*(1-x);
+  const yc =x=>p>0?(x<p?(m/(p*p))*(2*p*x-x*x):(m/((1-p)*(1-p)))*(1-2*p+2*p*x-x*x)):0;
+  const dyc=x=>p>0?(x<p?(2*m/(p*p))*(p-x):(2*m/((1-p)*(1-p)))*(p-x)):0;
+  const U=[],L=[];
+  for(let i=0;i<=n;i++){const x=xs[i],yT=yt(x),yC=yc(x),th=Math.atan(dyc(x));U.push([x-yT*Math.sin(th),yC+yT*Math.cos(th)]);L.push([x+yT*Math.sin(th),yC-yT*Math.cos(th)]);}
+  return [...U,...L.slice().reverse()];
+}
+AIRFOILS['naca4412']=naca4(4,4,12); AIRFOILS['naca2412']=naca4(2,4,12);
+AIRFOILS['naca0012']=naca4(0,0,12); AIRFOILS['naca6409']=naca4(6,4,9);
+AIRFOILS['naca4415']=naca4(4,4,15);
+(function(){
+  const n=48,t=.12,r=.2208,xs=[];
+  for(let i=0;i<=n;i++) xs.push((1-Math.cos(Math.PI*i/n))/2);
+  const yt=x=>t/.2*(.2969*Math.sqrt(x)-.126*x-.3516*x*x+.2843*x*x*x-.1015*x*x*x*x);
+  const yc=x=>x<=r?.36*(x*x*x-3*r*x*x+r*r*(3-r)*x):.36*r*r*r*(1-x);
   const dyc=x=>x<=r?.36*(3*x*x-6*r*x+r*r*(3-r)):-.36*r*r*r;
   const U=[],L=[];
   for(let i=0;i<=n;i++){const x=xs[i],yT=yt(x),yC=yc(x),th=Math.atan(dyc(x));U.push([x-yT*Math.sin(th),yC+yT*Math.cos(th)]);L.push([x+yT*Math.sin(th),yC-yT*Math.cos(th)]);}
   AIRFOILS['naca23012']=[...U,...L.slice().reverse()];
 })();
+AIRFOILS['clarky']=[[0,0],[.025,.0385],[.05,.0576],[.10,.0825],[.15,.0988],[.20,.1100],[.30,.1215],[.40,.1265],[.50,.1240],[.60,.1150],[.70,.1005],[.80,.0820],[.90,.0555],[.95,.0395],[1,.0125],[1,.0125],[.95,.0027],[.90,.0033],[.80,.0018],[.70,-.002],[.60,-.0068],[.50,-.012],[.40,-.0172],[.30,-.0218],[.20,-.0245],[.15,-.0245],[.10,-.0234],[.05,-.0197],[.025,-.015],[0,0]];
+AIRFOILS['e387']=[[0,0],[.025,.0393],[.05,.0545],[.10,.0759],[.15,.0912],[.20,.1018],[.30,.1117],[.40,.1115],[.50,.1047],[.60,.0919],[.70,.0732],[.80,.0504],[.90,.0256],[.95,.0128],[1,0],[1,0],[.95,.0004],[.90,.001],[.80,.0005],[.70,-.0031],[.60,-.0082],[.50,-.0144],[.40,-.0218],[.30,-.0296],[.20,-.0355],[.15,-.0369],[.10,-.0356],[.05,-.0295],[.025,-.0226],[0,0]];
+AIRFOILS['s1223']=[[0,0],[.01,.0340],[.025,.0520],[.05,.0750],[.10,.1070],[.20,.1470],[.30,.1650],[.40,.1640],[.50,.1500],[.60,.1270],[.70,.0970],[.80,.0640],[.90,.0310],[.95,.0145],[1,0],[1,0],[.95,.0015],[.90,.0030],[.80,-.0020],[.70,-.0110],[.60,-.0230],[.50,-.0380],[.40,-.0530],[.30,-.0650],[.20,-.0690],[.10,-.0530],[.05,-.0340],[.025,-.0210],[.01,-.0100],[0,0]];
+AIRFOILS['naca63412']=[[0,0],[.025,.0332],[.05,.0465],[.10,.0657],[.15,.0804],[.20,.0912],[.30,.1038],[.40,.1078],[.50,.1036],[.60,.0924],[.70,.0750],[.80,.0522],[.90,.0268],[.95,.0134],[1,0],[1,0],[.95,.0010],[.90,.0028],[.80,.0018],[.70,-.0040],[.60,-.0118],[.50,-.0215],[.40,-.0320],[.30,-.0408],[.20,-.0452],[.15,-.0444],[.10,-.0402],[.05,-.0312],[.025,-.0232],[0,0]];
 
-AIRFOILS['clarky']=[
-  [0,0],[.025,.0385],[.05,.0576],[.10,.0825],[.15,.0988],[.20,.1100],
-  [.30,.1215],[.40,.1265],[.50,.1240],[.60,.1150],[.70,.1005],[.80,.0820],
-  [.90,.0555],[.95,.0395],[1,.0125],
-  [1,.0125],[.95,.0027],[.90,.0033],[.80,.0018],[.70,-.002],[.60,-.0068],
-  [.50,-.012],[.40,-.0172],[.30,-.0218],[.20,-.0245],[.15,-.0245],
-  [.10,-.0234],[.05,-.0197],[.025,-.015],[0,0]
-];
-AIRFOILS['e387']=[
-  [0,0],[.025,.0393],[.05,.0545],[.10,.0759],[.15,.0912],[.20,.1018],
-  [.30,.1117],[.40,.1115],[.50,.1047],[.60,.0919],[.70,.0732],[.80,.0504],
-  [.90,.0256],[.95,.0128],[1,0],
-  [1,0],[.95,.0004],[.90,.001],[.80,.0005],[.70,-.0031],[.60,-.0082],
-  [.50,-.0144],[.40,-.0218],[.30,-.0296],[.20,-.0355],[.15,-.0369],
-  [.10,-.0356],[.05,-.0295],[.025,-.0226],[0,0]
-];
-AIRFOILS['s1223']=[
-  [0,0],[.01,.0340],[.025,.0520],[.05,.0750],[.10,.1070],[.20,.1470],
-  [.30,.1650],[.40,.1640],[.50,.1500],[.60,.1270],[.70,.0970],[.80,.0640],
-  [.90,.0310],[.95,.0145],[1,0],
-  [1,0],[.95,.0015],[.90,.0030],[.80,-.0020],[.70,-.0110],[.60,-.0230],
-  [.50,-.0380],[.40,-.0530],[.30,-.0650],[.20,-.0690],[.10,-.0530],
-  [.05,-.0340],[.025,-.0210],[.01,-.0100],[0,0]
-];
-AIRFOILS['naca63412']=[
-  [0,0],[.025,.0332],[.05,.0465],[.10,.0657],[.15,.0804],[.20,.0912],
-  [.30,.1038],[.40,.1078],[.50,.1036],[.60,.0924],[.70,.0750],[.80,.0522],
-  [.90,.0268],[.95,.0134],[1,0],
-  [1,0],[.95,.0010],[.90,.0028],[.80,.0018],[.70,-.0040],[.60,-.0118],
-  [.50,-.0215],[.40,-.0320],[.30,-.0408],[.20,-.0452],[.15,-.0444],
-  [.10,-.0402],[.05,-.0312],[.025,-.0232],[0,0]
-];
-
-// ── THREE.JS SETUP ────────────────────────────────────────────────────────────
+// ── THREE.JS ──────────────────────────────────────────────────────────────────
 let scene, camera, renderer, controls, uavGroup, animId;
-let radarInst = null, lastData = null;
+let radarInst=null, lastData=null;
 
 async function initThree() {
-  const {
-    Scene, PerspectiveCamera, WebGLRenderer, AmbientLight, DirectionalLight,
-    GridHelper, Group, Color, Fog, MeshPhongMaterial, LineBasicMaterial,
-    MeshBasicMaterial, BufferGeometry, Float32BufferAttribute, Mesh,
-    LineSegments, EdgesGeometry, LatheGeometry, CylinderGeometry,
-    CircleGeometry, BoxGeometry, SphereGeometry, Vector2, Vector3,
-    Box3, Matrix4
-  } = await import('three');
+  const { Scene,PerspectiveCamera,WebGLRenderer,AmbientLight,DirectionalLight,
+          GridHelper,Group,Color,Fog,MeshPhongMaterial,LineBasicMaterial,
+          MeshBasicMaterial,BufferGeometry,Float32BufferAttribute,Mesh,
+          LineSegments,EdgesGeometry,LatheGeometry,CylinderGeometry,
+          CircleGeometry,Vector2,Vector3,Box3,Matrix4 } = await import('three');
   const { OrbitControls } = await import('three/addons/controls/OrbitControls.js');
-
-  window.THREE = {
-    Scene, PerspectiveCamera, WebGLRenderer, AmbientLight, DirectionalLight,
-    GridHelper, Group, Color, Fog, MeshPhongMaterial, LineBasicMaterial,
-    MeshBasicMaterial, BufferGeometry, Float32BufferAttribute, Mesh,
-    LineSegments, EdgesGeometry, LatheGeometry, CylinderGeometry,
-    CircleGeometry, BoxGeometry, SphereGeometry, Vector2, Vector3,
-    Box3, Matrix4, OrbitControls, DoubleSide: 2
-  };
+  window.THREE = { Scene,PerspectiveCamera,WebGLRenderer,AmbientLight,DirectionalLight,
+    GridHelper,Group,Color,Fog,MeshPhongMaterial,LineBasicMaterial,MeshBasicMaterial,
+    BufferGeometry,Float32BufferAttribute,Mesh,LineSegments,EdgesGeometry,LatheGeometry,
+    CylinderGeometry,CircleGeometry,Vector2,Vector3,Box3,Matrix4,OrbitControls,DoubleSide:2 };
   window.T = window.THREE;
   setupScene();
 }
 
 function setupScene() {
-  const { Scene, PerspectiveCamera, WebGLRenderer, AmbientLight, DirectionalLight,
-          GridHelper, Group, Color, Fog, OrbitControls } = window.THREE;
-
+  const { Scene,PerspectiveCamera,WebGLRenderer,AmbientLight,DirectionalLight,
+          GridHelper,Group,Color,Fog,OrbitControls } = window.THREE;
   const canvas = document.getElementById('threeCanvas');
   const panel  = document.getElementById('viewerPanel');
   const rect   = panel.getBoundingClientRect();
-  const W = rect.width  > 10 ? rect.width  : (window.innerWidth  - 290);
-  const H = rect.height > 10 ? rect.height : (window.innerHeight - 52);
-
-  scene = new Scene();
-  window.threeScene = scene;
-  updateSceneBg();
-
-  camera = new PerspectiveCamera(45, W/H, 0.01, 200);
-  camera.position.set(2, 1.5, 4);
-
-  renderer = new WebGLRenderer({ canvas, antialias: true });
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-  renderer.setSize(W, H);
-  renderer.shadowMap.enabled = true;
-
-  const amb  = new AmbientLight(0xffffff, 0.9);    scene.add(amb);
-  const sun  = new DirectionalLight(0xffffff, 1.2); sun.position.set(4,8,5);   sun.castShadow=true; scene.add(sun);
-  const sun2 = new DirectionalLight(0xffffff, 0.6); sun2.position.set(-4,-2,3); scene.add(sun2);
-  const rim  = new DirectionalLight(0x88bbff, 0.4); rim.position.set(-5,2,-4);  scene.add(rim);
-  const bot  = new DirectionalLight(0xffffff,0.15); bot.position.set(0,-3,0);   scene.add(bot);
-
-  const grid = new GridHelper(12, 24, 0x2a2a2a, 0x1a1a1a);
-  grid.position.y = -0.8; scene.add(grid);
-
-  uavGroup = new Group(); scene.add(uavGroup);
-
-  controls = new OrbitControls(camera, renderer.domElement);
-  controls.enableDamping = true; controls.dampingFactor = 0.07;
-  controls.minDistance = 0.2;    controls.maxDistance = 30;
-  controls.target.set(0,0,0);    controls.update();
-
-  const ro = new ResizeObserver(onResize);
-  ro.observe(panel);
-  if (animId) cancelAnimationFrame(animId);
-
-  let loopCount = 0;
-  function loop() {
-    animId = requestAnimationFrame(loop);
-    controls.update();
-    renderer.render(scene, camera);
-    if (loopCount++ % 120 === 0) onResize();
-  }
+  const W = rect.width>10?rect.width:(window.innerWidth-290);
+  const H = rect.height>10?rect.height:(window.innerHeight-52);
+  scene = new Scene(); window.threeScene = scene; updateSceneBg();
+  camera = new PerspectiveCamera(45,W/H,0.01,200);
+  camera.position.set(3,2,1.5);
+  renderer = new WebGLRenderer({canvas,antialias:true});
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio,2));
+  renderer.setSize(W,H); renderer.shadowMap.enabled=true;
+  scene.add(new AmbientLight(0xffffff,0.9));
+  const sun=new DirectionalLight(0xffffff,1.2); sun.position.set(4,8,5); sun.castShadow=true; scene.add(sun);
+  const sun2=new DirectionalLight(0xffffff,0.6); sun2.position.set(-4,-2,3); scene.add(sun2);
+  const rim=new DirectionalLight(0x88bbff,0.4); rim.position.set(-5,2,-4); scene.add(rim);
+  const bot=new DirectionalLight(0xffffff,0.15); bot.position.set(0,-3,0); scene.add(bot);
+  const grid=new GridHelper(12,24,0x2a2a2a,0x1a1a1a); grid.position.y=-0.4; scene.add(grid);
+  uavGroup=new Group(); scene.add(uavGroup);
+  controls=new OrbitControls(camera,renderer.domElement);
+  controls.enableDamping=true; controls.dampingFactor=0.07;
+  controls.minDistance=0.2; controls.maxDistance=30;
+  controls.target.set(0,0,0); controls.update();
+  const ro=new ResizeObserver(onResize); ro.observe(panel);
+  if(animId) cancelAnimationFrame(animId);
+  let lc=0;
+  function loop(){ animId=requestAnimationFrame(loop); controls.update(); renderer.render(scene,camera); if(lc++%120===0) onResize(); }
   loop();
 }
 
 function updateSceneBg() {
-  if (!scene || !window.T) return;
-  const { Color, Fog } = window.T;
-  const dark = document.documentElement.getAttribute('data-theme') !== 'light';
-  const bgCol = dark ? 0x1a1f2e : 0xdde4ee;
-  scene.background = new Color(bgCol);
-  scene.fog = new Fog(bgCol, 20, 50);
+  if(!scene||!window.T) return;
+  const {Color,Fog}=window.T;
+  const dark=document.documentElement.getAttribute('data-theme')!=='light';
+  const bgCol=dark?0x1a1f2e:0xdde4ee;
+  scene.background=new Color(bgCol); scene.fog=new Fog(bgCol,20,50);
 }
 
 function onResize() {
-  if (!renderer || !camera) return;
-  const panel = document.getElementById('viewerPanel');
-  const r2 = panel.getBoundingClientRect();
-  const W = r2.width, H = r2.height;
-  if (W < 10 || H < 10) return;
-  camera.aspect = W/H; camera.updateProjectionMatrix();
-  renderer.setSize(W, H);
+  if(!renderer||!camera) return;
+  const panel=document.getElementById('viewerPanel');
+  const r2=panel.getBoundingClientRect();
+  const W=r2.width,H=r2.height;
+  if(W<10||H<10) return;
+  camera.aspect=W/H; camera.updateProjectionMatrix(); renderer.setSize(W,H);
 }
 
 function resetCamera() {
-  if (!controls || !camera) return;
-  camera.position.set(2, 1.5, 4);
-  controls.target.set(0,0,0);
-  controls.update();
+  if(!controls||!camera) return;
+  camera.position.set(3,2,1.5);
+  controls.target.set(0,0,0); controls.update();
 }
 
-// ── BUILD UAV MODEL ───────────────────────────────────────────────────────────
+// ── BUILD UAV ─────────────────────────────────────────────────────────────────
 function buildUAV(d, airfoilKey, isFW) {
-  const { MeshPhongMaterial, LineBasicMaterial, MeshBasicMaterial, BufferGeometry,
-          Float32BufferAttribute, Mesh, LineSegments, EdgesGeometry, LatheGeometry,
-          CylinderGeometry, CircleGeometry, BoxGeometry, Vector2, Vector3, Box3, Matrix4 } = window.T;
-  const DoubleSide = window.T.DoubleSide;
-  if (!uavGroup) { console.error('uavGroup not ready'); return; }
+  const {MeshPhongMaterial,LineBasicMaterial,MeshBasicMaterial,BufferGeometry,
+         Float32BufferAttribute,Mesh,LineSegments,EdgesGeometry,LatheGeometry,
+         CylinderGeometry,CircleGeometry,Vector2,Vector3,Box3,Matrix4} = window.T;
+  const DoubleSide=window.T.DoubleSide;
+  if(!uavGroup) return;
 
-  const toRemove = [];
-  uavGroup.traverse(c => { if (c !== uavGroup) toRemove.push(c); });
-  toRemove.forEach(c => {
-    if (c.geometry) c.geometry.dispose();
-    if (c.material) { Array.isArray(c.material) ? c.material.forEach(m=>m.dispose()) : c.material.dispose(); }
+  const toRemove=[];
+  uavGroup.traverse(c=>{if(c!==uavGroup) toRemove.push(c);});
+  toRemove.forEach(c=>{
+    if(c.geometry) c.geometry.dispose();
+    if(c.material){Array.isArray(c.material)?c.material.forEach(m=>m.dispose()):c.material.dispose();}
   });
   uavGroup.clear();
 
-  const isDark = document.documentElement.getAttribute('data-theme') !== 'light';
-  const wingMat   = new MeshPhongMaterial({ color:0x2a9d8f, side:DoubleSide, shininess:90, specular:0x88ddcc });
-  const bodyMat   = new MeshPhongMaterial({ color: isDark ? 0x888888 : 0x999999, shininess:70 });
-  const accentMat = new MeshPhongMaterial({ color:0xe9c46a, shininess:120 });
-  const edgeMat   = new LineBasicMaterial({ color:0x00ffcc });
+  const isDark=document.documentElement.getAttribute('data-theme')!=='light';
+  const wingMat  =new MeshPhongMaterial({color:0x2a9d8f,side:DoubleSide,shininess:90,specular:0x88ddcc});
+  const bodyMat  =new MeshPhongMaterial({color:isDark?0x888888:0x999999,shininess:70});
+  const accentMat=new MeshPhongMaterial({color:0xe9c46a,shininess:120});
+  const edgeMat  =new LineBasicMaterial({color:0x00ffcc,transparent:true,opacity:0.4});
 
-  const b   = d.wingspan;
-  const rc  = d.rootchord;
-  const tc2 = d.tipchord;
-  const af  = AIRFOILS[airfoilKey] || AIRFOILS['naca4412'];
-  const nAF = af.length;
-  const nSec = 32;
+  const b  =d.wingspan;
+  const rc =d.rootchord;
+  const tc2=d.tipchord;
+  const af =AIRFOILS[airfoilKey]||AIRFOILS['naca4412'];
+  const nAF=af.length;
+  const nSec=40;
 
+  // Wing spans along X axis, chord along Z, thickness along Y
+  // af[i] = [chordwise_x (0..1), thickness_y]
   function wingHalfGeo(sign) {
-    const pos=[], idx=[];
-    for (let si=0; si<=nSec; si++) {
-      const t=si/nSec, y=sign*b/2*t;
-      const chord=rc+(tc2-rc)*t, sweep=(rc-chord)*0.28*t;
-      const twist=(d.twistdeg||0)*t*Math.PI/180;
-      for (let pi=0; pi<nAF; pi++) {
-        const [px,py]=af[pi], xr=px-0.25;
-        const pxR=xr*Math.cos(twist)-py*Math.sin(twist)+0.25;
-        const pyR=xr*Math.sin(twist)+py*Math.cos(twist);
-        pos.push(pxR-0.5*chord+sweep, y, pyR*chord);
+    const pos=[],idx=[];
+    for(let si=0;si<=nSec;si++){
+      const t=si/nSec;
+      const span=sign*(b/2)*t;
+      const chord=rc+(tc2-rc)*t;
+      // forward sweep: leading edge sweeps back proportionally
+      const sweep=(rc-chord)*0.3*t;
+      const twist=(d.twistdeg||0)*t*(Math.PI/180);
+      for(let pi=0;pi<nAF;pi++){
+        const [cx,cy]=af[pi];
+        // cx: 0=leading edge, 1=trailing edge → map to Z axis
+        // cy: thickness → map to Y axis
+        // rotate for twist around chord quarter-point
+        const cxR=(cx-0.25)*Math.cos(twist)-cy*Math.sin(twist)+0.25;
+        const cyR=(cx-0.25)*Math.sin(twist)+cy*Math.cos(twist);
+        const z=(cxR-0.5)*chord+sweep;  // centre chord at origin
+        const y=cyR*chord;
+        pos.push(span, y, z);
       }
     }
-    for (let si=0;si<nSec;si++) for(let pi=0;pi<nAF-1;pi++) {
-      const a=si*nAF+pi,bb=si*nAF+pi+1,c=(si+1)*nAF+pi,dd=(si+1)*nAF+pi+1;
-      idx.push(a,bb,c,bb,dd,c);
+    for(let si=0;si<nSec;si++) for(let pi=0;pi<nAF-1;pi++){
+      const a=si*nAF+pi, bb2=si*nAF+pi+1, c=(si+1)*nAF+pi, dd=(si+1)*nAF+pi+1;
+      idx.push(a,bb2,c, bb2,dd,c);
     }
     const g=new BufferGeometry();
     g.setAttribute('position',new Float32BufferAttribute(pos,3));
@@ -658,222 +598,228 @@ function buildUAV(d, airfoilKey, isFW) {
 
   const gL=wingHalfGeo(-1), gR=wingHalfGeo(1);
   uavGroup.add(new Mesh(gL,wingMat), new Mesh(gR,wingMat));
-  [gL,gR].forEach(g=>uavGroup.add(new LineSegments(new EdgesGeometry(g,20),edgeMat)));
+  [gL,gR].forEach(g=>uavGroup.add(new LineSegments(new EdgesGeometry(g,25),edgeMat)));
 
-  if ((d.wingletpres||0)>0.5) {
+  // Winglets
+  if((d.wingletpres||0)>0.5){
     [-1,1].forEach(sign=>{
-      const wlH=b*0.08,nW=10,pos=[],idx=[];
+      const wlH=b*0.07, nW=12, pos=[], idx=[];
       for(let si=0;si<=nW;si++){
-        const t=si/nW,y=sign*b/2,chord=tc2*(1-t)+0.25*t,cant=t*Math.PI/2*0.55;
-        for(let pi=0;pi<nAF;pi++){const[px,py]=af[pi];pos.push(px-0.5*chord,y+py*chord*Math.sin(cant)+wlH*t,py*chord*Math.cos(cant));}
+        const t=si/nW, spanX=sign*b/2;
+        const chord=tc2*(1-t*0.6);
+        const cant=t*Math.PI/2*0.5;
+        const riseY=wlH*t;
+        for(let pi=0;pi<nAF;pi++){
+          const [cx,cy]=af[pi];
+          pos.push(spanX+cy*chord*Math.sin(cant)*sign, riseY+cy*chord*Math.cos(cant), (cx-0.5)*chord);
+        }
       }
-      for(let si=0;si<nW;si++)for(let pi=0;pi<nAF-1;pi++){const a=si*nAF+pi,bb=si*nAF+pi+1,c=(si+1)*nAF+pi,dd=(si+1)*nAF+pi+1;idx.push(a,bb,c,bb,dd,c);}
-      const g=new BufferGeometry();g.setAttribute('position',new Float32BufferAttribute(pos,3));g.setIndex(idx);g.computeVertexNormals();
+      for(let si=0;si<nW;si++) for(let pi=0;pi<nAF-1;pi++){
+        const a=si*nAF+pi,bb2=si*nAF+pi+1,c=(si+1)*nAF+pi,dd=(si+1)*nAF+pi+1;
+        idx.push(a,bb2,c,bb2,dd,c);
+      }
+      const g=new BufferGeometry(); g.setAttribute('position',new Float32BufferAttribute(pos,3)); g.setIndex(idx); g.computeVertexNormals();
       uavGroup.add(new Mesh(g,wingMat));
     });
   }
 
-  if (!isFW) {
-    const fLen=rc*3.0, fR=rc*0.072;
+  if(!isFW){
+    // Fuselage — cylinder along X axis
+    const fLen=rc*2.8, fR=rc*0.068;
     const pts=[];
-    for(let i=0;i<=24;i++){const t=i/24,r=fR*(1-.45*Math.pow(2*t-1,6));pts.push(new Vector2(r,(t-.45)*fLen));}
-    const fGeo=new LatheGeometry(pts,24);
-    fGeo.applyMatrix4(new Matrix4().makeRotationX(Math.PI/2));
+    for(let i=0;i<=28;i++){const t=i/28,r2=fR*(1-.4*Math.pow(2*t-1,6));pts.push(new Vector2(r2,(t-.42)*fLen));}
+    const fGeo=new LatheGeometry(pts,20);
+    fGeo.applyMatrix4(new Matrix4().makeRotationZ(Math.PI/2));
     uavGroup.add(new Mesh(fGeo,new MeshPhongMaterial({color:0x5a8a8a,shininess:60})));
 
+    // Nose cone
     const nosePts=[];
-    for(let i=0;i<=12;i++){const t=i/12;nosePts.push(new Vector2(fR*Math.sin(t*Math.PI/2),-fLen*.45-fLen*.18*(1-t)));}
+    for(let i=0;i<=12;i++){const t=i/12;nosePts.push(new Vector2(fR*Math.sin(t*Math.PI/2),-fLen*.42-fLen*.16*(1-t)));}
     const nGeo=new LatheGeometry(nosePts,16);
-    nGeo.applyMatrix4(new Matrix4().makeRotationX(Math.PI/2));
+    nGeo.applyMatrix4(new Matrix4().makeRotationZ(Math.PI/2));
     uavGroup.add(new Mesh(nGeo,accentMat));
 
-    const mGeo=new CylinderGeometry(fR*.55,fR*.55,rc*.10,14);
+    // Motor mount
+    const mGeo=new CylinderGeometry(fR*.5,fR*.5,rc*.08,14);
     mGeo.applyMatrix4(new Matrix4().makeRotationZ(Math.PI/2));
     const mMesh=new Mesh(mGeo,accentMat);
-    mMesh.position.x=(-fLen*.45+fLen*.18+rc*.05);
+    mMesh.position.x=-fLen*.42-fLen*.08;
     uavGroup.add(mMesh);
 
-    const pMesh=new Mesh(new CircleGeometry(fR*2.6,32),new MeshBasicMaterial({color:isDark?0x2dd4bf:0x0ea5a0,transparent:true,opacity:.12,side:DoubleSide}));
-    pMesh.rotation.y=Math.PI/2; pMesh.position.x=(-fLen*.45+fLen*.18+rc*.11);
+    // Prop disk
+    const pMesh=new Mesh(new CircleGeometry(fR*2.4,32),new MeshBasicMaterial({color:isDark?0x2dd4bf:0x0ea5a0,transparent:true,opacity:.13,side:DoubleSide}));
+    pMesh.rotation.y=Math.PI/2; pMesh.position.x=-fLen*.42-fLen*.14;
     uavGroup.add(pMesh);
 
-    const hsSpan=b*0.30,hsRC=rc*0.31,hsTaper=0.55;
-    const symAF=AIRFOILS['naca0012'],nSym=symAF.length;
+    // Horizontal tail
+    const hsSpan=b*0.28, hsRC=rc*0.28, hsTaper=0.55;
+    const symAF=AIRFOILS['naca0012'], nSym=symAF.length;
     [-1,1].forEach(sign=>{
       const pos=[],idx=[];
-      for(let si=0;si<=16;si++){const t=si/16,y=sign*hsSpan/2*t,chord=hsRC*(1-t*(1-hsTaper)),sw=(hsRC-chord)*0.45*t;for(let pi=0;pi<nSym;pi++){const[px,py]=symAF[pi];pos.push(px-.5*chord+sw,y,py*chord);}}
-      for(let si=0;si<16;si++)for(let pi=0;pi<nSym-1;pi++){const a=si*nSym+pi,bb=si*nSym+pi+1,c=(si+1)*nSym+pi,dd=(si+1)*nSym+pi+1;idx.push(a,bb,c,bb,dd,c);}
-      const g=new BufferGeometry();g.setAttribute('position',new Float32BufferAttribute(pos,3));g.setIndex(idx);g.computeVertexNormals();
-      const mesh=new Mesh(g,wingMat);mesh.position.x=fLen*.52;uavGroup.add(mesh);
+      for(let si=0;si<=14;si++){
+        const t=si/14, spanX=sign*hsSpan/2*t;
+        const chord=hsRC*(1-t*(1-hsTaper)), sw=(hsRC-chord)*0.4*t;
+        for(let pi=0;pi<nSym;pi++){const[cx,cy]=symAF[pi];pos.push(spanX,cy*chord,(cx-.5)*chord+sw);}
+      }
+      for(let si=0;si<14;si++) for(let pi=0;pi<nSym-1;pi++){const a=si*nSym+pi,bb2=si*nSym+pi+1,c=(si+1)*nSym+pi,dd=(si+1)*nSym+pi+1;idx.push(a,bb2,c,bb2,dd,c);}
+      const g=new BufferGeometry(); g.setAttribute('position',new Float32BufferAttribute(pos,3)); g.setIndex(idx); g.computeVertexNormals();
+      const mesh=new Mesh(g,wingMat); mesh.position.x=fLen*.46; uavGroup.add(mesh);
     });
 
-    const vsH=b*0.145,vsC=rc*0.29,pos2=[],idx2=[];
-    for(let si=0;si<=12;si++){const t=si/12,z=vsH*t,chord=vsC*(1-t*.42),sw=(vsC-chord)*.45*t;for(let pi=0;pi<symAF.length;pi++){const[px,py]=symAF[pi];pos2.push(px-.5*chord+sw,py*chord,z);}}
-    for(let si=0;si<12;si++)for(let pi=0;pi<symAF.length-1;pi++){const a=si*symAF.length+pi,bb=si*symAF.length+pi+1,c=(si+1)*symAF.length+pi,dd=(si+1)*symAF.length+pi+1;idx2.push(a,bb,c,bb,dd,c);}
-    const vGeo=new BufferGeometry();vGeo.setAttribute('position',new Float32BufferAttribute(pos2,3));vGeo.setIndex(idx2);vGeo.computeVertexNormals();
-    const vMesh=new Mesh(vGeo,wingMat);vMesh.position.x=fLen*.50;uavGroup.add(vMesh);
+    // Vertical tail
+    const vsH=b*0.13, vsC=rc*0.27, pos2=[], idx2=[], nSym2=symAF.length;
+    for(let si=0;si<=12;si++){
+      const t=si/12, riseY=vsH*t, chord=vsC*(1-t*.4), sw=(vsC-chord)*.4*t;
+      for(let pi=0;pi<nSym2;pi++){const[cx,cy]=symAF[pi];pos2.push(cy*chord,riseY,(cx-.5)*chord+sw);}
+    }
+    for(let si=0;si<12;si++) for(let pi=0;pi<nSym2-1;pi++){const a=si*nSym2+pi,bb2=si*nSym2+pi+1,c=(si+1)*nSym2+pi,dd=(si+1)*nSym2+pi+1;idx2.push(a,bb2,c,bb2,dd,c);}
+    const vGeo=new BufferGeometry(); vGeo.setAttribute('position',new Float32BufferAttribute(pos2,3)); vGeo.setIndex(idx2); vGeo.computeVertexNormals();
+    const vMesh=new Mesh(vGeo,wingMat); vMesh.position.x=fLen*.46; uavGroup.add(vMesh);
 
   } else {
-    const bwSpan=b*0.20,fwAF=AIRFOILS['naca23012']||af,nFW=fwAF.length;
+    // Flying wing centre body
+    const bwSpan=b*0.18, fwAF=AIRFOILS['naca23012']||af, nFW=fwAF.length;
     [-1,1].forEach(sign=>{
       const pos=[],idx=[];
-      for(let si=0;si<=14;si++){const t=si/14,y=sign*bwSpan*t,chord=rc*(1+0.35*(1-t)),thick=1+0.5*(1-t);for(let pi=0;pi<nFW;pi++){const[px,py]=fwAF[pi];pos.push(px-.5*chord,y,py*chord*thick);}}
-      for(let si=0;si<14;si++)for(let pi=0;pi<nFW-1;pi++){const a=si*nFW+pi,bb=si*nFW+pi+1,c=(si+1)*nFW+pi,dd=(si+1)*nFW+pi+1;idx.push(a,bb,c,bb,dd,c);}
-      const g=new BufferGeometry();g.setAttribute('position',new Float32BufferAttribute(pos,3));g.setIndex(idx);g.computeVertexNormals();
+      for(let si=0;si<=12;si++){
+        const t=si/12, spanX=sign*bwSpan*t;
+        const chord=rc*(1+0.3*(1-t));
+        for(let pi=0;pi<nFW;pi++){const[cx,cy]=fwAF[pi];pos.push(spanX,cy*chord,(cx-.5)*chord);}
+      }
+      for(let si=0;si<12;si++) for(let pi=0;pi<nFW-1;pi++){const a=si*nFW+pi,bb2=si*nFW+pi+1,c=(si+1)*nFW+pi,dd=(si+1)*nFW+pi+1;idx.push(a,bb2,c,bb2,dd,c);}
+      const g=new BufferGeometry(); g.setAttribute('position',new Float32BufferAttribute(pos,3)); g.setIndex(idx); g.computeVertexNormals();
       uavGroup.add(new Mesh(g,bodyMat));
     });
 
+    // Pusher nacelle
     const nacPts=[];
-    for(let i=0;i<=14;i++){const t=i/14;nacPts.push(new Vector2(rc*.055*(1-.3*t),(t-.5)*rc*.22));}
+    for(let i=0;i<=14;i++){const t=i/14;nacPts.push(new Vector2(rc*.05*(1-.3*t),(t-.5)*rc*.2));}
     const nacGeo=new LatheGeometry(nacPts,14);
-    nacGeo.applyMatrix4(new Matrix4().makeRotationX(Math.PI/2));
-    const nac=new Mesh(nacGeo,accentMat);nac.position.x=rc*.48;uavGroup.add(nac);
+    nacGeo.applyMatrix4(new Matrix4().makeRotationZ(Math.PI/2));
+    const nac=new Mesh(nacGeo,accentMat); nac.position.x=rc*.35; uavGroup.add(nac);
 
-    const ppMesh=new Mesh(new CircleGeometry(rc*.42,28),new MeshBasicMaterial({color:isDark?0x2dd4bf:0x0ea5a0,transparent:true,opacity:.13,side:DoubleSide}));
-    ppMesh.rotation.y=Math.PI/2;ppMesh.position.x=rc*.60;uavGroup.add(ppMesh);
-
-    [-1,1].forEach(sign=>{
-      const ys=bwSpan*sign,ye=b/2*.78*sign,spanEl=Math.abs(ye-ys);
-      const eMesh=new Mesh(new BoxGeometry(rc*.10,spanEl*.88,rc*.011),accentMat);
-      eMesh.position.set((rc+tc2/2)*0.48,(ys+ye)/2,0);
-      uavGroup.add(eMesh);
-    });
+    const ppMesh=new Mesh(new CircleGeometry(rc*.38,28),new MeshBasicMaterial({color:isDark?0x2dd4bf:0x0ea5a0,transparent:true,opacity:.13,side:DoubleSide}));
+    ppMesh.rotation.y=Math.PI/2; ppMesh.position.x=rc*.46; uavGroup.add(ppMesh);
   }
 
+  // Centre and frame camera
   const box=new Box3().setFromObject(uavGroup);
   const size=box.getSize(new Vector3()), cen=box.getCenter(new Vector3());
   uavGroup.position.sub(cen);
   const maxDim=Math.max(size.x,size.y,size.z);
-  camera.position.set(maxDim*.6,maxDim*.45,maxDim*1.3);
+  camera.position.set(maxDim*.5, maxDim*.35, maxDim*1.1);
   controls.target.set(0,0,0); controls.update();
 }
 
 function updateAirfoilLive() {
-  if (!lastData) return;
-  const k = document.getElementById('vairfoil').value;
-  buildUAV(lastData, k, document.getElementById('fflyingwing').checked);
-  document.getElementById('hudairfoil').textContent = AIRFOIL_META[k]?.name || k;
+  if(!lastData) return;
+  const k=document.getElementById('vairfoil').value;
+  buildUAV(lastData,k,document.getElementById('fflyingwing').checked);
+  document.getElementById('hudairfoil').textContent=AIRFOIL_META[k]?.name||k;
 }
 
-// ── FORM DATA ─────────────────────────────────────────────────────────────────
 function getFormData() {
   return {
-    payload:    document.getElementById('fpayload').value,
-    range:      document.getElementById('frange').value,
-    endurance:  document.getElementById('fendurance').value,
-    maxspan:    document.getElementById('fmaxspan').value,
-    battery:    document.getElementById('fbattery').value,
-    cruisems:   document.getElementById('fcruise').value,
-    flyingwing: document.getElementById('fflyingwing').checked,
-    airfoil:    document.getElementById('fairfoil').value,
+    payload:   document.getElementById('fpayload').value,
+    range:     document.getElementById('frange').value,
+    endurance: document.getElementById('fendurance').value,
+    maxspan:   document.getElementById('fmaxspan').value,
+    battery:   document.getElementById('fbattery').value,
+    cruisems:  document.getElementById('fcruise').value,
+    flyingwing:document.getElementById('fflyingwing').checked,
+    airfoil:   document.getElementById('fairfoil').value,
   };
 }
 
-// ── OPTIMIZE ──────────────────────────────────────────────────────────────────
 async function runOptimize() {
-  const btn = document.getElementById('optimizeBtn');
-  btn.disabled = true; btn.classList.add('loading');
+  const btn=document.getElementById('optimizeBtn');
+  btn.disabled=true; btn.classList.add('loading');
   try {
-    const resp = await fetch('/api/optimize', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(getFormData()) });
-    const json = await resp.json();
-    if (json.status === 'infeasible') { showFeasibility(false, json.warnings, json.errors); showViewerWarns(json.errors, json.warnings); return; }
-    if (json.status !== 'success') throw new Error(json.message || 'Unknown error');
-    lastData = json.data;
-    const ak = json.data.airfoilkey || document.getElementById('fairfoil').value;
-    document.getElementById('vairfoil').value = ak;
-    renderResults(json.data, ak, document.getElementById('fflyingwing').checked, json.warnings);
+    const resp=await fetch('/api/optimize',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(getFormData())});
+    const json=await resp.json();
+    if(json.status==='infeasible'){showFeasibility(false,json.warnings,json.errors);showViewerWarns(json.errors,json.warnings);return;}
+    if(json.status!=='success') throw new Error(json.message||'Unknown error');
+    lastData=json.data;
+    const ak=json.data.airfoilkey||document.getElementById('fairfoil').value;
+    document.getElementById('vairfoil').value=ak;
+    renderResults(json.data,ak,document.getElementById('fflyingwing').checked,json.warnings);
     switchTab('viewer');
-  } catch(e) { showFeasibility(false, [], [String(e)]); }
-  finally { btn.disabled = false; btn.classList.remove('loading'); }
+  } catch(e){showFeasibility(false,[],[String(e)]);}
+  finally{btn.disabled=false;btn.classList.remove('loading');}
 }
 
-function showViewerWarns(errs, warns) {
-  const p = document.getElementById('viewerWarnPanel');
-  p.style.display = 'flex';
-  p.innerHTML = [...(errs||[]),...(warns||[])].map(m=>`<div class="viewer-warn-item warn">${m}</div>`).join('');
-  setTimeout(()=>{ p.style.display='none'; p.innerHTML=''; }, 12000);
+function showViewerWarns(errs,warns) {
+  const p=document.getElementById('viewerWarnPanel');
+  p.style.display='flex';
+  p.innerHTML=[...(errs||[]),...(warns||[])].map(m=>`<div class="viewer-warn-item warn">${m}</div>`).join('');
+  setTimeout(()=>{p.style.display='none';p.innerHTML='';},12000);
 }
 
-// ── ANIMATE NUMBER ────────────────────────────────────────────────────────────
-function animNum(el, target, dec) {
-  const start=parseFloat(el.dataset.val||0), t0=performance.now();
-  function step(now) {
-    const p=Math.min((now-t0)/700,1), e=1-Math.pow(1-p,3);
-    el.textContent=(start+(target-start)*e).toFixed(dec);
-    if (p<1) requestAnimationFrame(step); else el.dataset.val=target;
-  }
+function animNum(el,target,dec) {
+  const start=parseFloat(el.dataset.val||0),t0=performance.now();
+  function step(now){const p=Math.min((now-t0)/700,1),e=1-Math.pow(1-p,3);el.textContent=(start+(target-start)*e).toFixed(dec);if(p<1)requestAnimationFrame(step);else el.dataset.val=target;}
   requestAnimationFrame(step);
 }
 
-// ── RENDER RESULTS ────────────────────────────────────────────────────────────
-function renderResults(d, ak, isFW, warns) {
-  if (!d || !d.wingspan) return;
+function renderResults(d,ak,isFW,warns) {
+  if(!d||!d.wingspan) return;
   document.getElementById('emptyOverlay').classList.add('hidden');
-  document.getElementById('viewerHud').style.display = 'flex';
-  document.getElementById('viewerAirfoilWrap').style.display = 'flex';
-  document.getElementById('hudspan').textContent    = `${d.wingspan.toFixed(3)} m`;
-  document.getElementById('hudar').textContent      = `AR ${d.aspectratio.toFixed(2)}`;
-  document.getElementById('hudairfoil').textContent = AIRFOIL_META[ak]?.name || ak;
-  document.getElementById('hudscore').textContent   = `Score ${d.score.toFixed(1)}`;
+  document.getElementById('viewerHud').style.display='flex';
+  document.getElementById('viewerAirfoilWrap').style.display='flex';
+  document.getElementById('hudspan').textContent=`${d.wingspan.toFixed(3)} m`;
+  document.getElementById('hudar').textContent=`AR ${d.aspectratio.toFixed(2)}`;
+  document.getElementById('hudairfoil').textContent=AIRFOIL_META[ak]?.name||ak;
+  document.getElementById('hudscore').textContent=`Score ${d.score.toFixed(1)}`;
 
-  setTimeout(()=>{ onResize(); if(uavGroup) buildUAV(d,ak,isFW); else setTimeout(()=>{ if(uavGroup) buildUAV(d,ak,isFW); },500); },50);
-  if (warns && warns.length) showViewerWarns([], warns);
+  setTimeout(()=>{onResize();if(uavGroup) buildUAV(d,ak,isFW);else setTimeout(()=>{if(uavGroup) buildUAV(d,ak,isFW);},500);},50);
+  if(warns&&warns.length) showViewerWarns([],warns);
 
-  animNum(document.getElementById('kpiscore'),     d.score,       1);
-  animNum(document.getElementById('kpild'),        d.ld,          2);
-  animNum(document.getElementById('kpirange'),     d.rangekm,     1);
-  animNum(document.getElementById('kpiendurance'), d.endurancehr, 2);
-  animNum(document.getElementById('kpimass'),      d.masstotal,   3);
-  animNum(document.getElementById('kpistall'),     d.stallspeed,  2);
+  animNum(document.getElementById('kpiscore'),    d.score,       1);
+  animNum(document.getElementById('kpild'),       d.ld,          2);
+  animNum(document.getElementById('kpirange'),    d.rangekm,     1);
+  animNum(document.getElementById('kpiendurance'),d.endurancehr, 2);
+  animNum(document.getElementById('kpimass'),     d.masstotal,   3);
+  animNum(document.getElementById('kpistall'),    d.stallspeed,  2);
 
-  document.getElementById('twingspan').textContent  = `${d.wingspan.toFixed(4)} m`;
-  document.getElementById('trootchord').textContent = `${d.rootchord.toFixed(4)} m`;
-  document.getElementById('ttipchord').textContent  = `${d.tipchord.toFixed(4)} m`;
-  document.getElementById('twingarea').textContent  = `${d.wingarea.toFixed(4)} m²`;
-  document.getElementById('tar').textContent        = d.aspectratio.toFixed(3);
-  document.getElementById('ttaper').textContent     = d.taperratio.toFixed(3);
-  document.getElementById('ttc').textContent        = `${(d.tc*100).toFixed(1)}%`;
-  document.getElementById('ttwist').textContent     = `${d.twistdeg.toFixed(2)}°`;
-  document.getElementById('twinglets').textContent  = (d.wingletpres||0)>0.5?'Yes':'No';
-  document.getElementById('tairfoil').textContent   = d.airfoilname || ak;
-  document.getElementById('ald').textContent        = d.ld.toFixed(3);
-  document.getElementById('acdo').textContent       = d.CDo.toFixed(5);
-  document.getElementById('acdi').textContent       = d.CDi.toFixed(5);
-  document.getElementById('astall').textContent     = `${d.stallspeed.toFixed(2)} m/s`;
-  document.getElementById('arange').textContent     = `${d.rangekm.toFixed(1)} km`;
-  document.getElementById('aendurance').textContent = `${d.endurancehr.toFixed(3)} hr`;
-  document.getElementById('aweight').textContent    = `${d.weightn.toFixed(2)} N`;
-  document.getElementById('amass').textContent      = `${d.masstotal.toFixed(3)} kg`;
+  document.getElementById('twingspan').textContent =`${d.wingspan.toFixed(4)} m`;
+  document.getElementById('trootchord').textContent=`${d.rootchord.toFixed(4)} m`;
+  document.getElementById('ttipchord').textContent =`${d.tipchord.toFixed(4)} m`;
+  document.getElementById('twingarea').textContent =`${d.wingarea.toFixed(4)} m²`;
+  document.getElementById('tar').textContent       =d.aspectratio.toFixed(3);
+  document.getElementById('ttaper').textContent    =d.taperratio.toFixed(3);
+  document.getElementById('ttc').textContent       =`${(d.tc*100).toFixed(1)}%`;
+  document.getElementById('ttwist').textContent    =`${d.twistdeg.toFixed(2)}°`;
+  document.getElementById('twinglets').textContent =(d.wingletpres||0)>0.5?'Yes':'No';
+  document.getElementById('tairfoil').textContent  =d.airfoilname||ak;
+  document.getElementById('ald').textContent       =d.ld.toFixed(3);
+  document.getElementById('acdo').textContent      =d.CDo.toFixed(5);
+  document.getElementById('acdi').textContent      =d.CDi.toFixed(5);
+  document.getElementById('astall').textContent    =`${d.stallspeed.toFixed(2)} m/s`;
+  document.getElementById('arange').textContent    =`${d.rangekm.toFixed(1)} km`;
+  document.getElementById('aendurance').textContent=`${d.endurancehr.toFixed(3)} hr`;
+  document.getElementById('aweight').textContent   =`${d.weightn.toFixed(2)} N`;
+  document.getElementById('amass').textContent     =`${d.masstotal.toFixed(3)} kg`;
 
-  const isDark = document.documentElement.getAttribute('data-theme') !== 'light';
-  const acc = isDark ? '#2dd4bf' : '#0ea5a0';
-  const gc  = isDark ? 'rgba(255,255,255,.07)' : 'rgba(0,0,0,.07)';
-  const lc  = isDark ? '#908e8a' : '#6b6a67';
-  if (radarInst) { radarInst.destroy(); radarInst = null; }
-  radarInst = new Chart(document.getElementById('radarChart').getContext('2d'), {
+  const isDark=document.documentElement.getAttribute('data-theme')!=='light';
+  const acc=isDark?'#2dd4bf':'#0ea5a0';
+  const gc=isDark?'rgba(255,255,255,.07)':'rgba(0,0,0,.07)';
+  const lc=isDark?'#908e8a':'#6b6a67';
+  if(radarInst){radarInst.destroy();radarInst=null;}
+  radarInst=new Chart(document.getElementById('radarChart').getContext('2d'),{
     type:'radar',
-    data:{
-      labels:['L/D','Score','Mass Eff.','Low Stall','Endurance'],
-      datasets:[{data:[
-        Math.min(100,d.ld/20*100), Math.min(100,d.score),
-        Math.max(0,100-d.masstotal/10*100), Math.max(0,100-d.stallspeed/30*100),
-        Math.min(100,d.endurancehr/4*100)
-      ],fill:true,backgroundColor:acc+'22',borderColor:acc,borderWidth:2,pointBackgroundColor:acc,pointRadius:4}]
-    },
+    data:{labels:['L/D','Score','Mass Eff.','Low Stall','Endurance'],
+      datasets:[{data:[Math.min(100,d.ld/20*100),Math.min(100,d.score),Math.max(0,100-d.masstotal/10*100),Math.max(0,100-d.stallspeed/30*100),Math.min(100,d.endurancehr/4*100)],
+      fill:true,backgroundColor:acc+'22',borderColor:acc,borderWidth:2,pointBackgroundColor:acc,pointRadius:4}]},
     options:{responsive:true,maintainAspectRatio:false,
       scales:{r:{min:0,max:100,ticks:{display:false},grid:{color:gc},pointLabels:{color:lc,font:{size:11,family:'Inter'}},angleLines:{color:gc}}},
-      plugins:{legend:{display:false}}
-    }
+      plugins:{legend:{display:false}}}
   });
 }
 
-// ── INIT ──────────────────────────────────────────────────────────────────────
-window.addEventListener('load', () => {
+window.addEventListener('load',()=>{
   initThree();
   fetchFeasibility();
-  document.getElementById('fairfoil').addEventListener('change', function() {
-    document.getElementById('vairfoil').value = this.value;
-  });
+  document.getElementById('fairfoil').addEventListener('change',function(){document.getElementById('vairfoil').value=this.value;});
 });
 </script>
 </body>
