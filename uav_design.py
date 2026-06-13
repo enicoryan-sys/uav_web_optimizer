@@ -122,7 +122,8 @@ def check_feasibility(cfg, airfoil_key="naca4412"):
     return is_feasible, warnings, errors
 
 
-def analyse(design, cfg):
+def analyse(design, cfg, airfoil_key="naca4412"):
+    af = AIRFOIL_DB.get(airfoil_key, AIRFOIL_DB["naca4412"])
     b        = min(design.wingspan, cfg.max_span_m)
     # Hard cap on AR to realistic UAV values
     AR       = min(design.aspect_ratio, 10.0 if cfg.flying_wing else 9.0)
@@ -137,18 +138,21 @@ def analyse(design, cfg):
     tip_chord  = root_chord * taper
     AR_eff     = AR * (1.0 + 1.9 * (tip_chord * 0.15 / b)) if winglets > 0.5 else AR
 
+    Cd_min = af["Cd_min"]
+    Cl_max = af["Cl_max"]
+
     if fw:
-        C_Do         = 0.016 + (0.005 * tc)
+        C_Do         = Cd_min + (0.005 * tc)
         trim_penalty = 0.08
     else:
-        C_Do         = 0.019 + (0.006 * tc)
+        C_Do         = Cd_min + (0.006 * tc)
         trim_penalty = 0.0
 
-    k_twist = max(0.94, 1.0 - (twist * 0.01))
-    C_Di    = (0.38 * k_twist) / (math.pi * AR_eff) if AR_eff > 0 else 0.4
-    ld_raw  = 0.45 / (C_Do + C_Di) if (C_Do + C_Di) > 0 else 5.0
-    ld      = ld_raw * (1.0 - trim_penalty)
-
+    k_twist   = max(0.94, 1.0 - (twist * 0.01))
+    C_Di      = (0.38 * k_twist) / (math.pi * AR_eff) if AR_eff > 0 else 0.4
+    Cl_cruise = 0.7 * Cl_max
+    ld_raw    = Cl_cruise / (C_Do + C_Di) if (C_Do + C_Di) > 0 else 5.0
+    ld        = ld_raw * (1.0 - trim_penalty)
     fw_mass_factor = 0.85 if fw else 1.0
     mass_struct    = fw_mass_factor * 0.14 * (b ** 1.6) * (AR ** 0.4) * \
                      (1.0 + (0.08 if winglets > 0.5 else 0.0))
