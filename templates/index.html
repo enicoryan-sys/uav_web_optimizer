@@ -596,10 +596,11 @@ function buildUAV(d, airfoilKey, isFW) {
     return g;
   }
 
-  const gL=wingHalfGeo(-1), gR=wingHalfGeo(1);
-  uavGroup.add(new Mesh(gL,wingMat), new Mesh(gR,wingMat));
-  [gL,gR].forEach(g=>uavGroup.add(new LineSegments(new EdgesGeometry(g,25),edgeMat)));
-
+    if(!isFW){
+    const gL=wingHalfGeo(-1), gR=wingHalfGeo(1);
+    uavGroup.add(new Mesh(gL,wingMat), new Mesh(gR,wingMat));
+    [gL,gR].forEach(g=>uavGroup.add(new LineSegments(new EdgesGeometry(g,25),edgeMat)));
+  }
     // Winglets — root exactly matches wingtip cross-section
   if((d.wingletpres||0)>0.5){
     [-1,1].forEach(sign=>{
