@@ -1,102 +1,150 @@
-from flask import Flask, render_template, request, jsonify
-from flask_cors import CORS
-import uav_design
+import numpy as np
+import scipy.optimize
+import math
 
-app = Flask(__name__)
-CORS(app)
+class Config:
+    def __init__(self, payload_kg=2.0, battery_wh=310, max_span_m=2.7,
+                 cruise_ms=16.0, mission_km=55, endurance_hr=2.0, flying_wing=False):
+        self.payload_kg   = float(payload_kg)
+        self.battery_wh   = float(battery_wh)
+        self.max_span_m   = float(max_span_m)
+        self.cruise_ms    = float(cruise_ms)
+        self.mission_km   = float(mission_km)
+        self.endurance_hr = float(endurance_hr)
+        self.flying_wing  = bool(flying_wing)
 
-@app.route('/')
-def index():
-    return render_template('index.html')
+class Design:
+    def __init__(self, wingspan, aspect_ratio, taper_ratio, t_c_ratio,
+                 twist_deg=0.0, winglet_pres=0.0):
+        self.wingspan     = float(wingspan)
+        self.aspect_ratio = float(aspect_ratio)
+        self.taper_ratio  = float(taper_ratio)
+        self.t_c_ratio    = float(t_c_ratio)
+        self.twist_deg    = float(twist_deg)
+        self.winglet_pres = float(winglet_pres)
 
-@app.route('/api/feasibility', methods=['POST'])
-def check_feasibility():
-    try:
-        data = request.json
-        cfg = uav_design.Config(
-            payload_kg   = float(data.get('payload',    2.0)),
-            battery_wh   = float(data.get('battery',  310.0)),
-            max_span_m   = float(data.get('maxspan',    2.7)),
-            cruise_ms    = float(data.get('cruisems',  16.0)),
-            mission_km   = float(data.get('range',     55.0)),
-            endurance_hr = float(data.get('endurance',  2.0)),
-            flying_wing  = bool(data.get('flyingwing', False)),
-        )
-        airfoil = data.get('airfoil', 'naca4412')
-        # normalise clark_y vs clarky
-        if airfoil == 'clarky':
-            airfoil = 'clark_y'
-        is_feasible, warnings, errors = uav_design.check_feasibility(cfg, airfoil)
-        return jsonify({
-            "status":   "success",
-            "feasible": is_feasible,
-            "warnings": warnings,
-            "errors":   errors
-        })
-    except Exception as e:
-        return jsonify({"status": "error", "message": str(e)}), 400
+AIRFOIL_DB = {
+    "naca4412":  {"name": "NACA 4412",  "Cl_max": 1.60, "Cd_min": 0.0080, "Re_min": 200000},
+    "naca2412":  {"name": "NACA 2412",  "Cl_max": 1.45, "Cd_min": 0.0075, "Re_min": 150000},
+    "naca0012":  {"name": "NACA 0012",  "Cl_max": 1.20, "Cd_min": 0.0070, "Re_min": 100000},
+    "naca6409":  {"name": "NACA 6409",  "Cl_max": 1.85, "Cd_min": 0.0090, "Re_min": 300000},
+    "naca23012": {"name": "NACA 23012", "Cl_max": 1.60, "Cd_min": 0.0078, "Re_min": 200000},
+    "naca4415":  {"name": "NACA 4415",  "Cl_max": 1.65, "Cd_min": 0.0085, "Re_min": 250000},
+    "clark_y":   {"name": "Clark Y",    "Cl_max": 1.55, "Cd_min": 0.0082, "Re_min": 150000},
+    "e387":      {"name": "Eppler E387","Cl_max": 1.50, "Cd_min": 0.0060, "Re_min": 100000},
+    "s1223":     {"name": "Selig S1223","Cl_max": 2.20, "Cd_min": 0.0120, "Re_min": 200000},
+    "naca63412": {"name": "NACA 63-412","Cl_max": 1.60, "Cd_min": 0.0055, "Re_min": 500000},
+}
 
-@app.route('/api/optimize', methods=['POST'])
-def run_optimization():
-    try:
-        data = request.json
-        cfg = uav_design.Config(
-            payload_kg   = float(data.get('payload',    2.0)),
-            battery_wh   = float(data.get('battery',  310.0)),
-            max_span_m   = float(data.get('maxspan',    2.7)),
-            cruise_ms    = float(data.get('cruisems',  16.0)),
-            mission_km   = float(data.get('range',     55.0)),
-            endurance_hr = float(data.get('endurance',  2.0)),
-            flying_wing  = bool(data.get('flyingwing', False)),
-        )
-        airfoil = data.get('airfoil', 'naca4412')
-        if airfoil == 'clarky':
-            airfoil = 'clark_y'
+def check_feasibility(cfg, airfoil_key="naca4412"):
+    warnings = []
+    errors   = []
+    af = AIRFOIL_DB.get(airfoil_key, AIRFOIL_DB["naca4412"])
+    Cl_max = af["Cl_max"]
+    Re_min = af["Re_min"]
+    rho    = 1.225
+    b      = cfg.max_span_m
+    V      = cfg.cruise_ms
+    battery_mass = cfg.battery_wh / 145.0
+    est_struct   = 0.14 * (b ** 1.6) * (10.0 ** 0.4)
+    mtow_est     = cfg.payload_kg + battery_mass + est_struct
+    W_est        = mtow_est * 9.81
+    Cl_cruise    = 0.6 * Cl_max
+    S_min_cruise = W_est / (0.5 * rho * V**2 * Cl_cruise) if V > 0 else 999
+    S_min_stall  = W_est / (0.5 * rho * (V*0.7)**2 * Cl_max) if V > 0 else 999
+    S_min        = max(S_min_cruise, S_min_stall)
+    S_max_available = b**2 / 4.0
+    AR_max = b**2 / S_min if S_min > 0 else 999
+    nu = 1.5e-5
+    chord_est = S_min / b if b > 0 else 0.1
+    Re_est    = V * chord_est / nu
+    if S_min > S_max_available * 1.5:
+        errors.append(f"Wing area required ({S_min:.2f} m²) far exceeds what a {b:.1f} m wingspan can provide. Try increasing wingspan or reducing payload.")
+    if AR_max < 3.0:
+        errors.append(f"Aspect ratio would need to be {AR_max:.1f} — below 3.0 is aerodynamically unstable. Increase wingspan or reduce payload.")
+    if V < 5.0:
+        errors.append(f"Cruise speed {V:.1f} m/s is below the minimum controllable airspeed (5 m/s).")
+    if cfg.payload_kg > 0.6 * mtow_est:
+        errors.append(f"Payload ({cfg.payload_kg:.1f} kg) is too high relative to estimated MTOW ({mtow_est:.2f} kg).")
+    if Re_est < Re_min and not errors:
+        warnings.append(f"Estimated Reynolds number (~{Re_est:.0f}) is below {af['name']}'s minimum Re ({Re_min:,}).")
+    if cfg.battery_wh / W_est < 20:
+        warnings.append(f"Battery energy is low relative to aircraft weight. Range may be very short.")
+    if cfg.flying_wing and airfoil_key not in ("naca23012", "naca0012", "naca4412"):
+        warnings.append(f"{af['name']} may cause pitch instability on a flying wing. Recommended: NACA 23012 or NACA 0012.")
+    is_feasible = len(errors) == 0
+    return is_feasible, warnings, errors
 
-        is_feasible, warnings, errors = uav_design.check_feasibility(cfg, airfoil)
-        if not is_feasible:
-            return jsonify({
-                "status":   "infeasible",
-                "feasible": False,
-                "warnings": warnings,
-                "errors":   errors
-            }), 422
+def analyse(design, cfg):
+    b        = min(design.wingspan, cfg.max_span_m)
+    AR       = design.aspect_ratio
+    taper    = design.taper_ratio
+    tc       = design.t_c_ratio
+    twist    = design.twist_deg
+    winglets = design.winglet_pres
+    fw       = cfg.flying_wing
+    S          = (b ** 2) / AR if AR > 0 else 0.1
+    root_chord = (2 * S) / (b * (1 + taper)) if b > 0 else 0.1
+    tip_chord  = root_chord * taper
+    AR_eff = AR * (1.0 + 1.9 * (tip_chord * 0.15 / b)) if winglets > 0.5 else AR
+    if fw:
+        C_Do         = 0.016 + (0.005 * tc) + (0.003 if winglets > 0.5 else 0.0)
+        trim_penalty = 0.08
+    else:
+        C_Do         = 0.019 + (0.006 * tc) + (0.002 if winglets > 0.5 else 0.0)
+        trim_penalty = 0.0
+    k_twist = max(0.88, 1.0 - (twist * 0.015))
+    C_Di    = (0.38 * k_twist) / (math.pi * AR_eff) if AR_eff > 0 else 0.4
+    ld_raw  = 0.45 / (C_Do + C_Di) if (C_Do + C_Di) > 0 else 5.0
+    ld      = ld_raw * (1.0 - trim_penalty)
+    fw_mass_factor = 0.85 if fw else 1.0
+    mass_struct    = fw_mass_factor * 0.14 * (b ** 1.6) * (AR ** 0.4) * (1.0 + (0.08 if winglets > 0.5 else 0.0))
+    mass_total     = cfg.payload_kg + (cfg.battery_wh / 145.0) + mass_struct
+    weight         = mass_total * 9.81
+    stall_speed = math.sqrt((2 * weight) / (1.225 * S * 1.15)) if S > 0 else 10.0
+    range_km    = (cfg.battery_wh * 0.65 * ld * 3.6) / weight if weight > 0 else 0
+    endurance   = range_km / (cfg.cruise_ms * 3.6) if cfg.cruise_ms > 0 else 0
+    safety      = max(1.0, (tc * 150.0) / (b + 0.5))
+    stability_penalty = max(0.0, (8.0 - AR) * 1.5) if (fw and AR < 8.0) else 0.0
+    range_score     = min(25.0, (range_km / cfg.mission_km) * 20.0)
+    endurance_score = min(25.0, (endurance / cfg.endurance_hr) * 20.0)
+    safety_score    = min(25.0, (safety / 2.0) * 15.0)
+    ld_score        = min(25.0, (ld / 18.0) * 20.0)
+    score = min(100.0, max(5.0, range_score + endurance_score + safety_score + ld_score - stability_penalty))
+    return {
+        "score":        round(score, 2),
+        "ld":           round(ld, 3),
+        "range_km":     round(range_km, 2),
+        "endurance_hr": round(endurance, 3),
+        "stall_speed":  round(stall_speed, 2),
+        "mass_total":   round(mass_total, 3),
+        "weight_n":     round(weight, 3),
+        "wingspan":     round(b, 4),
+        "aspect_ratio": round(AR, 4),
+        "taper_ratio":  round(taper, 4),
+        "t_c":          round(tc, 4),
+        "root_chord":   round(root_chord, 4),
+        "tip_chord":    round(tip_chord, 4),
+        "twist_deg":    round(twist, 3),
+        "winglet_pres": round(winglets, 3),
+        "wing_area":    round(S, 4),
+        "C_Do":         round(C_Do, 5),
+        "C_Di":         round(C_Di, 5),
+        "flying_wing":  fw,
+    }
 
-        best_design, score = uav_design.optimize(cfg)
-        r = uav_design.analyse(best_design, cfg)
-
-        # remap keys to match what the frontend expects
-        results = {
-            "score":        r["score"],
-            "ld":           r["ld"],
-            "rangekm":      r["range_km"],
-            "endurancehr":  r["endurance_hr"],
-            "stallspeed":   r["stall_speed"],
-            "masstotal":    r["mass_total"],
-            "weightn":      r["weight_n"],
-            "wingspan":     r["wingspan"],
-            "aspectratio":  r["aspect_ratio"],
-            "taperratio":   r["taper_ratio"],
-            "tc":           r["t_c"],
-            "rootchord":    r["root_chord"],
-            "tipchord":     r["tip_chord"],
-            "twistdeg":     r["twist_deg"],
-            "wingletpres":  r["winglet_pres"],
-            "wingarea":     r["wing_area"],
-            "CDo":          r["C_Do"],
-            "CDi":          r["C_Di"],
-            "airfoilkey":   airfoil,
-            "airfoilname":  uav_design.AIRFOIL_DB.get(airfoil, {}).get("name", airfoil),
-        }
-
-        return jsonify({
-            "status":   "success",
-            "feasible": True,
-            "warnings": warnings,
-            "data":     results
-        })
-    except Exception as e:
-        return jsonify({"status": "error", "message": str(e)}), 400
-
-if __name__ == '__main__':
-    app.run(debug=True)
+def optimize(cfg):
+    fw = cfg.flying_wing
+    if fw:
+        bounds = [(0.5, cfg.max_span_m),(7.0,22.0),(0.2,0.7),(0.09,0.18),(0.0,3.0),(0.0,1.0)]
+    else:
+        bounds = [(0.5, cfg.max_span_m),(4.0,20.0),(0.1,1.0),(0.06,0.20),(0.0,6.0),(0.0,1.0)]
+    def objective_wrapper(flat_x):
+        d = Design(wingspan=flat_x[0], aspect_ratio=flat_x[1], taper_ratio=flat_x[2],
+                   t_c_ratio=flat_x[3], twist_deg=flat_x[4], winglet_pres=flat_x[5])
+        return -analyse(d, cfg)["score"]
+    res = scipy.optimize.differential_evolution(objective_wrapper, bounds, maxiter=200,
+                                                 popsize=15, tol=1e-6, seed=42, polish=True)
+    best_design = Design(wingspan=res.x[0], aspect_ratio=res.x[1], taper_ratio=res.x[2],
+                         t_c_ratio=res.x[3], twist_deg=res.x[4], winglet_pres=res.x[5])
+    return best_design, -res.fun
