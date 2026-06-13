@@ -52,23 +52,6 @@ def run_optimization():
         best_design, score = uav_design.optimize(cfg)
         r = uav_design.analyse(best_design, cfg)
 
-        # Compute Reynolds number for XFOIL
-        rho = 1.225
-        nu  = 1.5e-5
-        mean_chord = (r["root_chord"] + r["tip_chord"]) / 2.0
-        reynolds = cfg.cruise_ms * mean_chord / nu
-
-        # Run real XFOIL simulation
-        xfoil_data = uav_design.run_xfoil_simulation(airfoil, reynolds)
-
-        # Re-analyse with real XFOIL data if available
-        if xfoil_data:
-            r = uav_design.analyse(best_design, cfg, xfoil_data=xfoil_data)
-            if not warnings and not xfoil_data:
-                warnings.append("XFOIL simulation not available — using estimated aerodynamics.")
-        else:
-            warnings.append("XFOIL simulation unavailable on this server — using estimated aerodynamics.")
-
         results = {
             "score":       r["score"],
             "ld":          r["ld"],
@@ -88,8 +71,7 @@ def run_optimization():
             "wingarea":    r["wing_area"],
             "CDo":         r["C_Do"],
             "CDi":         r["C_Di"],
-            "xfoilRun":    r.get("xfoil_run", False),
-            "xfoil":       r.get("xfoil", None),
+            "xfoilRun":    False,
             "airfoilkey":  airfoil,
             "airfoilname": uav_design.AIRFOIL_DB.get(airfoil, {}).get("name", airfoil),
         }
