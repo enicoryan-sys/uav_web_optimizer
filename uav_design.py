@@ -168,10 +168,10 @@ def analyse(design, cfg, airfoil_key="naca4412"):
     # Penalise designs where stall speed exceeds cruise speed
     stall_penalty = max(0.0, (stall_speed - cfg.cruise_ms * 0.85) * 5.0)
 
-    range_score     = min(25.0, (range_km / cfg.mission_km) * 20.0)
-    endurance_score = min(25.0, (endurance / cfg.endurance_hr) * 20.0)
-    safety_score    = min(25.0, (safety / 2.0) * 15.0)
-    ld_score        = min(25.0, (ld / 18.0) * 20.0)
+        range_score     = min(25.0, (range_km / (cfg.mission_km * 3.0)) * 25.0)
+    endurance_score = min(25.0, (endurance / (cfg.endurance_hr * 3.0)) * 25.0)
+        safety_score    = min(25.0, (safety / 4.0) * 25.0)
+    ld_score        = min(25.0, (ld / 14.0) * 25.0)
     score = min(100.0, max(5.0,
         range_score + endurance_score + safety_score + ld_score
         - stability_penalty - stall_penalty))
