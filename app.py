@@ -14,13 +14,13 @@ def check_feasibility():
     try:
         data = request.json
         cfg = uav_design.Config(
-            payload_kg   = float(data.get('payload',     2.0)),
-            battery_wh   = float(data.get('battery',   310.0)),
-            max_span_m   = float(data.get('max_span',    2.7)),
-            cruise_ms    = float(data.get('cruise_ms',  16.0)),
-            mission_km   = float(data.get('range',      55.0)),
-            endurance_hr = float(data.get('endurance',   2.0)),
-            flying_wing  = bool(data.get('flying_wing', False)),
+            payload_kg   = float(data.get('payload',    2.0)),
+            battery_wh   = float(data.get('battery',  310.0)),
+            max_span_m   = float(data.get('maxspan',    2.7)),
+            cruise_ms    = float(data.get('cruisems',  16.0)),
+            mission_km   = float(data.get('range',     55.0)),
+            endurance_hr = float(data.get('endurance',  2.0)),
+            flying_wing  = bool(data.get('flyingwing', False)),
         )
         airfoil = data.get('airfoil', 'naca4412')
         is_feasible, warnings, errors = uav_design.check_feasibility(cfg, airfoil)
@@ -38,17 +38,16 @@ def run_optimization():
     try:
         data = request.json
         cfg = uav_design.Config(
-            payload_kg   = float(data.get('payload',     2.0)),
-            battery_wh   = float(data.get('battery',   310.0)),
-            max_span_m   = float(data.get('max_span',    2.7)),
-            cruise_ms    = float(data.get('cruise_ms',  16.0)),
-            mission_km   = float(data.get('range',      55.0)),
-            endurance_hr = float(data.get('endurance',   2.0)),
-            flying_wing  = bool(data.get('flying_wing', False)),
+            payload_kg   = float(data.get('payload',    2.0)),
+            battery_wh   = float(data.get('battery',  310.0)),
+            max_span_m   = float(data.get('maxspan',    2.7)),
+            cruise_ms    = float(data.get('cruisems',  16.0)),
+            mission_km   = float(data.get('range',     55.0)),
+            endurance_hr = float(data.get('endurance',  2.0)),
+            flying_wing  = bool(data.get('flyingwing', False)),
         )
         airfoil = data.get('airfoil', 'naca4412')
 
-        # Run feasibility first — block impossible designs
         is_feasible, warnings, errors = uav_design.check_feasibility(cfg, airfoil)
         if not is_feasible:
             return jsonify({
