@@ -698,6 +698,7 @@ function buildUAV(d, airfoilKey, isFW) {
     const vMesh=new Mesh(vGeo,wingMat); vMesh.position.x=fLen*.46; uavGroup.add(vMesh);
 
   } else {
+  
     // Flying wing centre body
     const bwSpan=b*0.18, fwAF=AIRFOILS['naca23012']||af, nFW=fwAF.length;
     [-1,1].forEach(sign=>{
