@@ -50,7 +50,7 @@ def run_optimization():
             return jsonify({"status":"infeasible","feasible":False,"warnings":warnings,"errors":errors}), 422
 
         best_design, score = uav_design.optimize(cfg)
-                r = uav_design.analyse(best_design, cfg, airfoil)
+        r = uav_design.analyse(best_design, cfg, airfoil)
 
         results = {
             "score":       r["score"],
