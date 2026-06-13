@@ -601,12 +601,12 @@ function buildUAV(d, airfoilKey, isFW) {
     uavGroup.add(new Mesh(gL,wingMat), new Mesh(gR,wingMat));
     [gL,gR].forEach(g=>uavGroup.add(new LineSegments(new EdgesGeometry(g,25),edgeMat)));
   }
-    // Winglets — root exactly matches wingtip cross-section
-  
+
+
   
     if(!isFW){
     // Fuselage — cylinder along X axis
-    const fLen=rc*2.8, fR=rc*0.068;
+    const fLen=d.wingspan*0.55, fR=d.wingspan*0.028;
     const pts=[];
     for(let i=0;i<=28;i++){const t=i/28,r2=fR*(1-.4*Math.pow(2*t-1,6));pts.push(new Vector2(r2,(t-.42)*fLen));}
     const fGeo=new LatheGeometry(pts,20);
