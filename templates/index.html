@@ -602,48 +602,7 @@ function buildUAV(d, airfoilKey, isFW) {
     [gL,gR].forEach(g=>uavGroup.add(new LineSegments(new EdgesGeometry(g,25),edgeMat)));
   }
     // Winglets — root exactly matches wingtip cross-section
-  if(!isFW && (d.wingletpres||0)>0.5){
-    [-1,1].forEach(sign=>{
-      const wlH  = b * 0.07;
-      const nW   = 20;
-      const pos  = [], idx = [];
-
-      // Compute the exact sweep offset at the tip (matches wingHalfGeo at t=1)
-      const tipSweep = (rc - tc2) * 0.3 * 1.0; // same formula as wingHalfGeo
-
-      for(let si=0;si<=nW;si++){
-        const t = si / nW;
-        // Smoothstep cant: 0° at root → 75° at tip
-        const smooth = t * t * (3 - 2 * t);
-        const cant   = smooth * 75 * Math.PI / 180;
-        const riseY  = wlH * t;
-        const chord  = tc2 * (1 - t * 0.45);
-        // Z sweep: at root matches tip sweep, then adds taper sweep
-        const zSweep = tipSweep + (tc2 - chord) * 0.3 * t;
-
-        for(let pi=0;pi<nAF;pi++){
-          const [cx, cy] = af[pi];
-          // At t=0, cant=0 so this exactly matches a flat wingtip cross-section
-          // cx maps chordwise (Z), cy maps thickness
-          // thickness rotates with cant: when cant=0, pure Y; when cant=90, pure X
-          const thickness = cy * chord;
-          const px = sign * (b/2) + thickness * Math.sin(cant) * sign;
-          const py = riseY + thickness * Math.cos(cant);
-          const pz = (cx - 0.5) * chord + zSweep;
-          pos.push(px, py, pz);
-        }
-      }
-      for(let si=0;si<nW;si++) for(let pi=0;pi<nAF-1;pi++){
-        const a=si*nAF+pi, b2=si*nAF+pi+1, c=(si+1)*nAF+pi, dd=(si+1)*nAF+pi+1;
-        idx.push(a,b2,c, b2,dd,c);
-      }
-      const g = new BufferGeometry();
-      g.setAttribute('position', new Float32BufferAttribute(pos, 3));
-      g.setIndex(idx);
-      g.computeVertexNormals();
-      uavGroup.add(new Mesh(g, wingMat));
-    });
-  }
+  
   
     if(!isFW){
     // Fuselage — cylinder along X axis
