@@ -644,7 +644,7 @@ function buildUAV(d, airfoilKey, isFW) {
     });
   }
   
-  if(!isFW){
+    if(!isFW){
     // Fuselage — cylinder along X axis
     const fLen=rc*2.8, fR=rc*0.068;
     const pts=[];
@@ -698,30 +698,60 @@ function buildUAV(d, airfoilKey, isFW) {
     const vMesh=new Mesh(vGeo,wingMat); vMesh.position.x=fLen*.46; uavGroup.add(vMesh);
 
   } else {
-  
-    // Flying wing centre body
-    const bwSpan=b*0.18, fwAF=AIRFOILS['naca23012']||af, nFW=fwAF.length;
+    // Flying wing — 30° swept planform using NACA 23012 (reflex, stable)
+    const fwAF = AIRFOILS['naca23012'] || af;
+    const nFW  = fwAF.length;
+    const nSec = 40;
+    const sweepAngle = 30 * Math.PI / 180;
+
     [-1,1].forEach(sign=>{
-      const pos=[],idx=[];
-      for(let si=0;si<=12;si++){
-        const t=si/12, spanX=sign*bwSpan*t;
-        const chord=rc*(1+0.3*(1-t));
-        for(let pi=0;pi<nFW;pi++){const[cx,cy]=fwAF[pi];pos.push(spanX,cy*chord,(cx-.5)*chord);}
+      const pos=[], idx=[];
+      for(let si=0;si<=nSec;si++){
+        const t     = si/nSec;
+        const spanX = sign*(b/2)*t;
+        const chord = rc*(1 - t*(1-d.taperratio));
+        const leSweep = Math.abs(spanX)*Math.tan(sweepAngle);
+        const twist = (d.twistdeg||0)*t*(Math.PI/180);
+        for(let pi=0;pi<nFW;pi++){
+          const [cx,cy]=fwAF[pi];
+          const cxR=(cx-0.25)*Math.cos(twist)-cy*Math.sin(twist)+0.25;
+          const cyR=(cx-0.25)*Math.sin(twist)+cy*Math.cos(twist);
+          const pz = leSweep + cxR*chord - chord*0.25;
+          const py = cyR*chord;
+          pos.push(spanX, py, pz);
+        }
       }
-      for(let si=0;si<12;si++) for(let pi=0;pi<nFW-1;pi++){const a=si*nFW+pi,bb2=si*nFW+pi+1,c=(si+1)*nFW+pi,dd=(si+1)*nFW+pi+1;idx.push(a,bb2,c,bb2,dd,c);}
-      const g=new BufferGeometry(); g.setAttribute('position',new Float32BufferAttribute(pos,3)); g.setIndex(idx); g.computeVertexNormals();
-      uavGroup.add(new Mesh(g,bodyMat));
+      for(let si=0;si<nSec;si++) for(let pi=0;pi<nFW-1;pi++){
+        const a=si*nFW+pi, b2=si*nFW+pi+1, c=(si+1)*nFW+pi, dd=(si+1)*nFW+pi+1;
+        idx.push(a,b2,c, b2,dd,c);
+      }
+      const g=new BufferGeometry();
+      g.setAttribute('position',new Float32BufferAttribute(pos,3));
+      g.setIndex(idx); g.computeVertexNormals();
+      uavGroup.add(new Mesh(g,wingMat));
+      uavGroup.add(new LineSegments(new EdgesGeometry(g,25),edgeMat));
     });
 
-    // Pusher nacelle
+    // Pusher nacelle — centred, sits on top of wing centre, pushed aft
     const nacPts=[];
-    for(let i=0;i<=14;i++){const t=i/14;nacPts.push(new Vector2(rc*.05*(1-.3*t),(t-.5)*rc*.2));}
+    for(let i=0;i<=14;i++){
+      const t=i/14;
+      nacPts.push(new Vector2(rc*0.045*(1-0.4*t),(t-0.5)*rc*0.22));
+    }
     const nacGeo=new LatheGeometry(nacPts,14);
     nacGeo.applyMatrix4(new Matrix4().makeRotationZ(Math.PI/2));
-    const nac=new Mesh(nacGeo,accentMat); nac.position.x=rc*.35; uavGroup.add(nac);
+    const nac=new Mesh(nacGeo,accentMat);
+    nac.position.set(0, rc*0.07, rc*0.38);
+    uavGroup.add(nac);
 
-    const ppMesh=new Mesh(new CircleGeometry(rc*.38,28),new MeshBasicMaterial({color:isDark?0x2dd4bf:0x0ea5a0,transparent:true,opacity:.13,side:DoubleSide}));
-    ppMesh.rotation.y=Math.PI/2; ppMesh.position.x=rc*.46; uavGroup.add(ppMesh);
+    // Pusher prop disk
+    const ppMesh=new Mesh(
+      new CircleGeometry(rc*0.32,28),
+      new MeshBasicMaterial({color:isDark?0x2dd4bf:0x0ea5a0,transparent:true,opacity:0.13,side:DoubleSide})
+    );
+    ppMesh.rotation.y=Math.PI/2;
+    ppMesh.position.set(0, rc*0.07, rc*0.50);
+    uavGroup.add(ppMesh);
   }
 
   // Centre and frame camera
@@ -731,6 +761,26 @@ function buildUAV(d, airfoilKey, isFW) {
   const maxDim=Math.max(size.x,size.y,size.z);
   camera.position.set(maxDim*.5, maxDim*.35, maxDim*1.1);
   controls.target.set(0,0,0); controls.update();
+}
+
+function updateAirfoilLive() {
+  if(!lastData) return;
+  const k=document.getElementById('vairfoil').value;
+  buildUAV(lastData,k,document.getElementById('fflyingwing').checked);
+  document.getElementById('hudairfoil').textContent=AIRFOIL_META[k]?.name||k;
+}
+
+function getFormData() {
+  return {
+    payload:   document.getElementById('fpayload').value,
+    range:     document.getElementById('frange').value,
+    endurance: document.getElementById('fendurance').value,
+    maxspan:   document.getElementById('fmaxspan').value,
+    battery:   document.getElementById('fbattery').value,
+    cruisems:  document.getElementById('fcruise').value,
+    flyingwing:document.getElementById('fflyingwing').checked,
+    airfoil:   document.getElementById('fairfoil').value,
+  };
 }
 
 function updateAirfoilLive() {
