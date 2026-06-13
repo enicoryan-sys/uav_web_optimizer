@@ -600,39 +600,50 @@ function buildUAV(d, airfoilKey, isFW) {
   uavGroup.add(new Mesh(gL,wingMat), new Mesh(gR,wingMat));
   [gL,gR].forEach(g=>uavGroup.add(new LineSegments(new EdgesGeometry(g,25),edgeMat)));
 
-  // Winglets — anchored to the actual wingtip position
+  // Winglets — blended, canted, properly trailing-edge-aligned
   if((d.wingletpres||0)>0.5){
     [-1,1].forEach(sign=>{
-      const wlH = b * 0.08;
-      const nW  = 14;
-      // Compute tip position: span = ±b/2, chord=tc2, sweep offset
-      const tipSweep = (rc - tc2) * 0.3;
+      const wlH    = b * 0.07;
+      const nW     = 20;
       const pos=[], idx=[];
+
+      // Wingtip trailing edge Z position (where tip chord ends)
+      const tipTrailingZ = tc2 * 0.5;
+      const tipLeadingZ  = -tc2 * 0.5 + (rc - tc2) * 0.3; // sweep offset
+
       for(let si=0;si<=nW;si++){
-        const t     = si/nW;
-        const cant  = t * Math.PI/2 * 0.55;        // cants outward 0→50°
-        const riseY = wlH * t;
-        const chord = tc2 * (1 - t * 0.45);        // tapers toward tip
-        const sweep = tipSweep + (tc2 - chord) * 0.35 * t;
+        const t = si / nW;
+        // Smooth cant: starts at ~15° (not 90°), curves to ~65° at tip
+        // Use smoothstep so root blends into wing naturally
+        const cantDeg = 15 + 50 * (t * t * (3 - 2 * t)); // smoothstep 15→65°
+        const cant    = cantDeg * Math.PI / 180;
+        const riseY   = wlH * t;
+        const chord   = tc2 * (1 - t * 0.5);
+        // Track trailing edge Z as winglet rises
+        const zOffset = tipLeadingZ + (tipTrailingZ - tipLeadingZ) * 0.0 + (tc2 - chord) * 0.4 * t;
+
         for(let pi=0;pi<nAF;pi++){
-          const [cx,cy]=af[pi];
-          // X: wingtip spanwise position + cant-induced lateral offset
-          const px = sign*(b/2) + cy*chord*Math.sin(cant)*sign;
-          // Y: rise upward
-          const py = riseY + cy*chord*Math.cos(cant);
-          // Z: chordwise, aligned with wingtip trailing/leading edge
-          const pz = (cx-0.5)*chord + sweep;
+          const [cx, cy] = af[pi];
+          // Rotate airfoil cross-section by cant angle around Z axis
+          const ax = cy * chord;          // thickness → lateral
+          const ay = 0;                   // will be set by rise
+          const rotX = ax * Math.cos(cant);
+          const rotY = ax * Math.sin(cant) + riseY;
+          const px   = sign * (b/2) + rotX * sign;
+          const py   = rotY;
+          const pz   = (cx - 0.5) * chord + zOffset;
           pos.push(px, py, pz);
         }
       }
       for(let si=0;si<nW;si++) for(let pi=0;pi<nAF-1;pi++){
-        const a=si*nAF+pi, bb2=si*nAF+pi+1, c=(si+1)*nAF+pi, dd=(si+1)*nAF+pi+1;
-        idx.push(a,bb2,c, bb2,dd,c);
+        const a=si*nAF+pi, b2=si*nAF+pi+1, c=(si+1)*nAF+pi, dd=(si+1)*nAF+pi+1;
+        idx.push(a,b2,c, b2,dd,c);
       }
-      const g=new BufferGeometry();
-      g.setAttribute('position',new Float32BufferAttribute(pos,3));
-      g.setIndex(idx); g.computeVertexNormals();
-      uavGroup.add(new Mesh(g,wingMat));
+      const g = new BufferGeometry();
+      g.setAttribute('position', new Float32BufferAttribute(pos, 3));
+      g.setIndex(idx);
+      g.computeVertexNormals();
+      uavGroup.add(new Mesh(g, wingMat));
     });
   }
 
