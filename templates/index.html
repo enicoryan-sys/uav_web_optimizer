@@ -608,10 +608,13 @@ function buildUAV(d, airfoilKey, isFW) {
     // Fuselage — cylinder along X axis
     const fLen=d.wingspan*0.55, fR=d.wingspan*0.028;
     const pts=[];
-    for(let i=0;i<=28;i++){const t=i/28,r2=fR*(1-.4*Math.pow(2*t-1,6));pts.push(new Vector2(r2,(t-.42)*fLen));}
+    for(let i=0;i<=28;i++){const t=i/28,r2=fR*(1-.4*Math.pow(2*t-1,6));pts.push(new Vector2(r2,(t-.5)*fLen));}
     const fGeo=new LatheGeometry(pts,20);
     fGeo.applyMatrix4(new Matrix4().makeRotationZ(Math.PI/2));
-    uavGroup.add(new Mesh(fGeo,new MeshPhongMaterial({color:0x5a8a8a,shininess:60})));
+  
+    const fMesh=new Mesh(fGeo,new MeshPhongMaterial({color:0x5a8a8a,shininess:60}));
+    fMesh.position.x=fLen*0.04;
+    uavGroup.add(fMesh);
 
     // Nose cone
     const nosePts=[];
