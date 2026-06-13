@@ -710,7 +710,7 @@ function buildUAV(d, airfoilKey, isFW) {
         const t     = si/nSec;
         const spanX = sign*(b/2)*t;
         const chord = rc*(1 - t*(1-d.taperratio));
-        const leSweep = Math.abs(spanX)*Math.tan(sweepAngle);
+        const leSweep = t*(b/2)*Math.tan(sweepAngle);
         const twist = (d.twistdeg||0)*t*(Math.PI/180);
         for(let pi=0;pi<nFW;pi++){
           const [cx,cy]=fwAF[pi];
