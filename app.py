@@ -23,18 +23,11 @@ def check_feasibility():
             flying_wing  = bool(data.get('flyingwing', False)),
         )
         airfoil = data.get('airfoil', 'naca4412')
-        # normalise clark_y vs clarky
-        if airfoil == 'clarky':
-            airfoil = 'clark_y'
+        if airfoil == 'clarky': airfoil = 'clark_y'
         is_feasible, warnings, errors = uav_design.check_feasibility(cfg, airfoil)
-        return jsonify({
-            "status":   "success",
-            "feasible": is_feasible,
-            "warnings": warnings,
-            "errors":   errors
-        })
+        return jsonify({"status":"success","feasible":is_feasible,"warnings":warnings,"errors":errors})
     except Exception as e:
-        return jsonify({"status": "error", "message": str(e)}), 400
+        return jsonify({"status":"error","message":str(e)}), 400
 
 @app.route('/api/optimize', methods=['POST'])
 def run_optimization():
@@ -50,53 +43,59 @@ def run_optimization():
             flying_wing  = bool(data.get('flyingwing', False)),
         )
         airfoil = data.get('airfoil', 'naca4412')
-        if airfoil == 'clarky':
-            airfoil = 'clark_y'
+        if airfoil == 'clarky': airfoil = 'clark_y'
 
         is_feasible, warnings, errors = uav_design.check_feasibility(cfg, airfoil)
         if not is_feasible:
-            return jsonify({
-                "status":   "infeasible",
-                "feasible": False,
-                "warnings": warnings,
-                "errors":   errors
-            }), 422
+            return jsonify({"status":"infeasible","feasible":False,"warnings":warnings,"errors":errors}), 422
 
         best_design, score = uav_design.optimize(cfg)
         r = uav_design.analyse(best_design, cfg)
 
-        # remap keys to match what the frontend expects
-        results = {
-            "score":        r["score"],
-            "ld":           r["ld"],
-            "rangekm":      r["range_km"],
-            "endurancehr":  r["endurance_hr"],
-            "stallspeed":   r["stall_speed"],
-            "masstotal":    r["mass_total"],
-            "weightn":      r["weight_n"],
-            "wingspan":     r["wingspan"],
-            "aspectratio":  r["aspect_ratio"],
-            "taperratio":   r["taper_ratio"],
-            "tc":           r["t_c"],
-            "rootchord":    r["root_chord"],
-            "tipchord":     r["tip_chord"],
-            "twistdeg":     r["twist_deg"],
-            "wingletpres":  r["winglet_pres"],
-            "wingarea":     r["wing_area"],
-            "CDo":          r["C_Do"],
-            "CDi":          r["C_Di"],
-            "airfoilkey":   airfoil,
-            "airfoilname":  uav_design.AIRFOIL_DB.get(airfoil, {}).get("name", airfoil),
-        }
+        # Compute Reynolds number for XFOIL
+        rho = 1.225
+        nu  = 1.5e-5
+        mean_chord = (r["root_chord"] + r["tip_chord"]) / 2.0
+        reynolds = cfg.cruise_ms * mean_chord / nu
 
-        return jsonify({
-            "status":   "success",
-            "feasible": True,
-            "warnings": warnings,
-            "data":     results
-        })
+        # Run real XFOIL simulation
+        xfoil_data = uav_design.run_xfoil_simulation(airfoil, reynolds)
+
+        # Re-analyse with real XFOIL data if available
+        if xfoil_data:
+            r = uav_design.analyse(best_design, cfg, xfoil_data=xfoil_data)
+            if not warnings and not xfoil_data:
+                warnings.append("XFOIL simulation not available — using estimated aerodynamics.")
+        else:
+            warnings.append("XFOIL simulation unavailable on this server — using estimated aerodynamics.")
+
+        results = {
+            "score":       r["score"],
+            "ld":          r["ld"],
+            "rangekm":     r["range_km"],
+            "endurancehr": r["endurance_hr"],
+            "stallspeed":  r["stall_speed"],
+            "masstotal":   r["mass_total"],
+            "weightn":     r["weight_n"],
+            "wingspan":    r["wingspan"],
+            "aspectratio": r["aspect_ratio"],
+            "taperratio":  r["taper_ratio"],
+            "tc":          r["t_c"],
+            "rootchord":   r["root_chord"],
+            "tipchord":    r["tip_chord"],
+            "twistdeg":    r["twist_deg"],
+            "wingletpres": r["winglet_pres"],
+            "wingarea":    r["wing_area"],
+            "CDo":         r["C_Do"],
+            "CDi":         r["C_Di"],
+            "xfoilRun":    r.get("xfoil_run", False),
+            "xfoil":       r.get("xfoil", None),
+            "airfoilkey":  airfoil,
+            "airfoilname": uav_design.AIRFOIL_DB.get(airfoil, {}).get("name", airfoil),
+        }
+        return jsonify({"status":"success","feasible":True,"warnings":warnings,"data":results})
     except Exception as e:
-        return jsonify({"status": "error", "message": str(e)}), 400
+        return jsonify({"status":"error","message":str(e)}), 400
 
 if __name__ == '__main__':
     app.run(debug=True)
