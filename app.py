@@ -23,12 +23,15 @@ def check_feasibility():
             flying_wing  = bool(data.get('flyingwing', False)),
         )
         airfoil = data.get('airfoil', 'naca4412')
+        # normalise clark_y vs clarky
+        if airfoil == 'clarky':
+            airfoil = 'clark_y'
         is_feasible, warnings, errors = uav_design.check_feasibility(cfg, airfoil)
         return jsonify({
-            "status": "success",
+            "status":   "success",
             "feasible": is_feasible,
             "warnings": warnings,
-            "errors": errors
+            "errors":   errors
         })
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 400
@@ -47,6 +50,8 @@ def run_optimization():
             flying_wing  = bool(data.get('flyingwing', False)),
         )
         airfoil = data.get('airfoil', 'naca4412')
+        if airfoil == 'clarky':
+            airfoil = 'clark_y'
 
         is_feasible, warnings, errors = uav_design.check_feasibility(cfg, airfoil)
         if not is_feasible:
@@ -58,9 +63,32 @@ def run_optimization():
             }), 422
 
         best_design, score = uav_design.optimize(cfg)
-        results = uav_design.analyse(best_design, cfg)
-        results['airfoil_key']  = airfoil
-        results['airfoil_name'] = uav_design.AIRFOIL_DB.get(airfoil, {}).get('name', airfoil)
+        r = uav_design.analyse(best_design, cfg)
+
+        # remap keys to match what the frontend expects
+        results = {
+            "score":        r["score"],
+            "ld":           r["ld"],
+            "rangekm":      r["range_km"],
+            "endurancehr":  r["endurance_hr"],
+            "stallspeed":   r["stall_speed"],
+            "masstotal":    r["mass_total"],
+            "weightn":      r["weight_n"],
+            "wingspan":     r["wingspan"],
+            "aspectratio":  r["aspect_ratio"],
+            "taperratio":   r["taper_ratio"],
+            "tc":           r["t_c"],
+            "rootchord":    r["root_chord"],
+            "tipchord":     r["tip_chord"],
+            "twistdeg":     r["twist_deg"],
+            "wingletpres":  r["winglet_pres"],
+            "wingarea":     r["wing_area"],
+            "CDo":          r["C_Do"],
+            "CDi":          r["C_Di"],
+            "airfoilkey":   airfoil,
+            "airfoilname":  uav_design.AIRFOIL_DB.get(airfoil, {}).get("name", airfoil),
+        }
+
         return jsonify({
             "status":   "success",
             "feasible": True,
