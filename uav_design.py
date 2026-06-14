@@ -17,13 +17,14 @@ class Config:
 
 class Design:
     def __init__(self, wingspan, aspect_ratio, taper_ratio, t_c_ratio,
-                 twist_deg=0.0, winglet_pres=0.0):
+                 twist_deg=0.0, winglet_pres=0.0, sweep_deg=0.0):
         self.wingspan     = float(wingspan)
         self.aspect_ratio = float(aspect_ratio)
         self.taper_ratio  = float(taper_ratio)
         self.t_c_ratio    = float(t_c_ratio)
         self.twist_deg    = float(twist_deg)
         self.winglet_pres = float(winglet_pres)
+        self.sweep_deg    = float(sweep_deg)
 
 AIRFOIL_DB = {
     "naca4412":  {"name": "NACA 4412",  "Cl_max": 1.60, "Cd_min": 0.0080, "Re_min": 200000},
@@ -54,7 +55,6 @@ def check_feasibility(cfg, airfoil_key="naca4412"):
     mtow_est     = cfg.payload_kg + battery_mass + est_struct
     W_est        = mtow_est * 9.81
 
-    # Realistic AR for the given span — cap at 10 for feasibility check
     AR_check   = min(10.0, 8.0)
     S_est      = (b ** 2) / AR_check
     Cl_cruise  = 0.6 * Cl_max
@@ -69,7 +69,6 @@ def check_feasibility(cfg, airfoil_key="naca4412"):
     chord_est = S_min / b if b > 0 else 0.1
     Re_est    = V * chord_est / nu
 
-    # Stall speed at a realistic AR=8 wing
     stall_est = math.sqrt((2 * W_est) / (rho * S_est * Cl_max)) if S_est > 0 else 99
 
     # ── HARD ERRORS ──────────────────────────────────────────────────
@@ -125,12 +124,12 @@ def check_feasibility(cfg, airfoil_key="naca4412"):
 def analyse(design, cfg, airfoil_key="naca4412"):
     af = AIRFOIL_DB.get(airfoil_key, AIRFOIL_DB["naca4412"])
     b        = min(design.wingspan, cfg.max_span_m)
-    # Hard cap on AR to realistic UAV values
     AR       = min(design.aspect_ratio, 10.0 if cfg.flying_wing else 9.0)
     taper    = design.taper_ratio
     tc       = design.t_c_ratio
-    twist    = min(abs(design.twist_deg), 3.0)
+    twist    = min(abs(design.twist_deg), 5.0)
     winglets = design.winglet_pres
+    sweep    = design.sweep_deg if cfg.flying_wing else 0.0
     fw       = cfg.flying_wing
 
     S          = (b ** 2) / AR if AR > 0 else 0.1
@@ -142,17 +141,19 @@ def analyse(design, cfg, airfoil_key="naca4412"):
     Cl_max = af["Cl_max"]
 
     if fw:
-        C_Do         = (Cd_min * 3.5) + (0.006 * tc)
-        trim_penalty = 0.08
+        C_Do = (Cd_min * 3.5) + (0.005 * tc)
+        # Trim drag depends on sweep — well-swept FW trims more naturally
+        trim_penalty = 0.03 if sweep >= 25.0 else 0.08
     else:
-        C_Do         = (Cd_min * 3.5) + (0.007 * tc)
+        C_Do         = (Cd_min * 3.5) + (0.006 * tc)
         trim_penalty = 0.0
 
-    k_twist   = max(0.94, 1.0 - (twist * 0.01))
+    k_twist   = max(0.90, 1.0 - (twist * 0.012))
     C_Di      = (0.38 * k_twist) / (math.pi * AR_eff) if AR_eff > 0 else 0.4
     Cl_cruise = 0.7 * Cl_max
     ld_raw    = (Cl_cruise / (C_Do + C_Di)) * 0.55 if (C_Do + C_Di) > 0 else 5.0
     ld        = ld_raw * (1.0 - trim_penalty)
+
     fw_mass_factor = 0.85 if fw else 1.0
     mass_struct    = fw_mass_factor * 0.14 * (b ** 1.6) * (AR ** 0.4) * \
                      (1.0 + (0.08 if winglets > 0.5 else 0.0))
@@ -163,7 +164,43 @@ def analyse(design, cfg, airfoil_key="naca4412"):
     range_km    = (cfg.battery_wh * 0.40 * ld * 3.6) / weight if weight > 0 else 0
     endurance   = range_km / (cfg.cruise_ms * 3.6) if cfg.cruise_ms > 0 else 0
     safety      = max(1.0, (tc * 150.0) / (b + 0.5))
-    stability_penalty = max(0.0, (8.0 - AR) * 1.5) if (fw and AR < 8.0) else 0.0
+
+    # ── FLYING WING STABILITY PENALTIES ──────────────────────────────
+    stability_penalty = 0.0
+    if fw:
+        # 1. Sweep — primary pitch stability mechanism
+        if sweep < 10.0:
+            stability_penalty += 20.0
+        elif sweep < 20.0:
+            stability_penalty += (20.0 - sweep) * 1.5
+        elif sweep > 45.0:
+            stability_penalty += (sweep - 45.0) * 0.8
+
+        # 2. Taper — affects spanload and tip stall resistance
+        if taper < 0.2:
+            stability_penalty += 8.0
+        elif taper > 0.6:
+            stability_penalty += 4.0
+
+        # 3. Washout — minimum 2° needed to prevent tip stall
+        if twist < 2.0:
+            stability_penalty += (2.0 - twist) * 5.0
+
+        # 4. AR — very high AR flying wings are hard to stabilise
+        if AR > 9.0:
+            stability_penalty += (AR - 9.0) * 3.0
+
+        # 5. Airfoil — reflexed or symmetric strongly preferred
+        if airfoil_key not in ("naca23012", "naca0012", "naca4412"):
+            stability_penalty += 5.0
+
+        # 6. Sweep-taper coupling — low sweep + high taper is problematic
+        if sweep < 25.0 and taper > 0.5:
+            stability_penalty += 4.0
+
+    else:
+        # Conventional aircraft — only penalise very low AR
+        stability_penalty = max(0.0, (4.0 - AR) * 1.5) if AR < 4.0 else 0.0
 
     # Penalise designs where stall speed exceeds cruise speed
     stall_penalty = max(0.0, (stall_speed - cfg.cruise_ms * 0.85) * 5.0)
@@ -192,6 +229,7 @@ def analyse(design, cfg, airfoil_key="naca4412"):
         "tip_chord":    round(tip_chord, 4),
         "twist_deg":    round(twist, 3),
         "winglet_pres": round(winglets, 3),
+        "sweep_deg":    round(sweep, 2),
         "wing_area":    round(S, 4),
         "C_Do":         round(C_Do, 5),
         "C_Di":         round(C_Di, 5),
@@ -204,21 +242,23 @@ def optimize(cfg):
     fw = cfg.flying_wing
     if fw:
         bounds = [
-            (0.5,  cfg.max_span_m),
-            (6.0,  10.0),   # AR 6–10 for flying wing
-            (0.2,   0.6),
-            (0.09,  0.16),
-            (0.0,   3.0),
-            (0.0,   1.0),
+            (0.5,  cfg.max_span_m),  # wingspan
+            (5.0,  9.0),             # AR
+            (0.2,  0.55),            # taper
+            (0.09, 0.15),            # t/c
+            (2.0,  5.0),             # twist — min 2° washout
+            (0.0,  1.0),             # winglets
+            (20.0, 45.0),            # sweep
         ]
     else:
         bounds = [
-            (0.5,  cfg.max_span_m),
-            (4.0,   9.0),   # AR 4–9 for conventional UAV
-            (0.3,   0.8),
-            (0.08,  0.16),
-            (0.0,   3.0),
-            (0.0,   1.0),
+            (0.5,  cfg.max_span_m),  # wingspan
+            (4.0,  9.0),             # AR
+            (0.3,  0.8),             # taper
+            (0.08, 0.16),            # t/c
+            (0.0,  3.0),             # twist
+            (0.0,  1.0),             # winglets
+            (0.0,  0.0),             # sweep — fixed at 0 for conventional
         ]
 
     def objective_wrapper(flat_x):
@@ -229,8 +269,9 @@ def optimize(cfg):
             t_c_ratio    = flat_x[3],
             twist_deg    = flat_x[4],
             winglet_pres = flat_x[5],
+            sweep_deg    = flat_x[6],
         )
-        return -analyse(d, cfg)["score"]
+        return -analyse(d, cfg, cfg.__dict__.get("airfoil_key", "naca4412"))["score"]
 
     res = scipy.optimize.differential_evolution(
         objective_wrapper, bounds, maxiter=200, popsize=15,
@@ -243,5 +284,6 @@ def optimize(cfg):
         t_c_ratio    = res.x[3],
         twist_deg    = res.x[4],
         winglet_pres = res.x[5],
+        sweep_deg    = res.x[6],
     )
     return best_design, -res.fun
