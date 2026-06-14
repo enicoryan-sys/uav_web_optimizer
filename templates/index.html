@@ -121,6 +121,12 @@ main{grid-column:2;grid-row:2;overflow:hidden;display:flex;flex-direction:column
   background:rgba(0,0,0,.6);border:1px solid rgba(255,255,255,.15);border-radius:var(--r-md);
   color:rgba(255,255,255,.6);backdrop-filter:blur(8px);cursor:pointer;transition:color var(--tr)}
 .reset-cam-btn:hover{color:#fff}
+  .btn-export-stl{position:absolute;bottom:14px;left:110px;font-size:11px;padding:5px 10px;
+  background:rgba(0,0,0,.6);border:1px solid rgba(255,255,255,.15);border-radius:var(--r-md);
+  color:rgba(255,255,255,.6);backdrop-filter:blur(8px);cursor:pointer;transition:color var(--tr);
+  display:none;align-items:center;gap:6px}
+.btn-export-stl:hover{color:#fff}
+.btn-export-stl.ready{display:flex}
 #analyticsPanel{overflow-y:auto;padding:20px;gap:20px;flex-direction:column}
 .kpi-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:12px}
 .kpi{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);
@@ -309,6 +315,10 @@ main{grid-column:2;grid-row:2;overflow:hidden;display:flex;flex-direction:column
     <div class="viewer-warn-panel" id="viewerWarnPanel"></div>
     <div class="viewer-controls">Drag · Rotate &nbsp;&nbsp; Scroll · Zoom &nbsp;&nbsp; Right-drag · Pan</div>
     <button class="reset-cam-btn" onclick="resetCamera()">↺ Reset View</button>
+    <button class="btn-export-stl" id="btnExportSTL" onclick="exportSTL()" title="Export STL for 3D printing">
+  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+  Export STL
+</button>
   </div>
 
   <div class="tab-panel" id="analyticsPanel">
@@ -790,6 +800,72 @@ function showViewerWarns(errs,warns) {
   setTimeout(()=>{p.style.display='none';p.innerHTML='';},12000);
 }
 
+function exportSTL() {
+  if (!uavGroup || !lastData) return;
+  const isFW = document.getElementById('fflyingwing').checked;
+  const filename = isFW ? 'flying_wing_uav.stl' : 'conventional_uav.stl';
+
+  // Collect all meshes from the uavGroup
+  const meshes = [];
+  uavGroup.traverse(obj => { if (obj.isMesh && obj.geometry) meshes.push(obj); });
+  if (!meshes.length) return;
+
+  // Build binary STL
+  const totalTris = meshes.reduce((sum, m) => {
+    const idx = m.geometry.index;
+    return sum + (idx ? idx.count / 3 : m.geometry.attributes.position.count / 3);
+  }, 0);
+
+  const buf = new ArrayBuffer(84 + totalTris * 50);
+  const view = new DataView(buf);
+  // 80-byte header
+  const enc = new TextEncoder();
+  enc.encodeInto('UAV Design Optimizer Export'.padEnd(80), new Uint8Array(buf, 0, 80));
+  view.setUint32(80, totalTris, true);
+
+  let offset = 84;
+  const {Vector3, Matrix3} = window.T;
+
+  meshes.forEach(mesh => {
+    const geo = mesh.geometry;
+    const pos = geo.attributes.position;
+    const normalMatrix = new Matrix3().getNormalMatrix(mesh.matrixWorld);
+    const idx = geo.index;
+    const triCount = idx ? idx.count / 3 : pos.count / 3;
+
+    for (let i = 0; i < triCount; i++) {
+      const ia = idx ? idx.getX(i*3)   : i*3;
+      const ib = idx ? idx.getX(i*3+1) : i*3+1;
+      const ic = idx ? idx.getX(i*3+2) : i*3+2;
+
+      const ax=pos.getX(ia),ay=pos.getY(ia),az=pos.getZ(ia);
+      const bx=pos.getX(ib),by=pos.getY(ib),bz=pos.getZ(ib);
+      const cx=pos.getX(ic),cy=pos.getY(ic),cz=pos.getZ(ic);
+
+      // Normal via cross product
+      const ex=bx-ax,ey=by-ay,ez=bz-az;
+      const fx=cx-ax,fy=cy-ay,fz=cz-az;
+      let nx=ey*fz-ez*fy, ny=ez*fx-ex*fz, nz=ex*fy-ey*fx;
+      const nl=Math.sqrt(nx*nx+ny*ny+nz*nz)||1;
+      nx/=nl; ny/=nl; nz/=nl;
+
+      // Scale from metres → mm (factor 1000) for slicer compatibility
+      const S=1000;
+      view.setFloat32(offset,    nx, true); view.setFloat32(offset+4,  ny, true); view.setFloat32(offset+8,  nz, true);
+      view.setFloat32(offset+12, ax*S, true); view.setFloat32(offset+16, ay*S, true); view.setFloat32(offset+20, az*S, true);
+      view.setFloat32(offset+24, bx*S, true); view.setFloat32(offset+28, by*S, true); view.setFloat32(offset+32, bz*S, true);
+      view.setFloat32(offset+36, cx*S, true); view.setFloat32(offset+40, cy*S, true); view.setFloat32(offset+44, cz*S, true);
+      view.setUint16(offset+48, 0, true);
+      offset += 50;
+    }
+  });
+
+  const blob = new Blob([buf], {type: 'application/octet-stream'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = filename; a.click();
+  URL.revokeObjectURL(url);
+}
 function animNum(el,target,dec) {
   const start=parseFloat(el.dataset.val||0),t0=performance.now();
   function step(now){const p=Math.min((now-t0)/700,1),e=1-Math.pow(1-p,3);el.textContent=(start+(target-start)*e).toFixed(dec);if(p<1)requestAnimationFrame(step);else el.dataset.val=target;}
@@ -801,6 +877,7 @@ function renderResults(d,ak,isFW,warns) {
   document.getElementById('emptyOverlay').classList.add('hidden');
   document.getElementById('viewerHud').style.display='flex';
   document.getElementById('viewerAirfoilWrap').style.display='flex';
+  document.getElementById('btnExportSTL').classList.add('ready');
   document.getElementById('hudspan').textContent=`${d.wingspan.toFixed(3)} m`;
   document.getElementById('hudar').textContent=`AR ${d.aspectratio.toFixed(2)}`;
   document.getElementById('hudairfoil').textContent=AIRFOIL_META[ak]?.name||ak;
