@@ -334,8 +334,7 @@ main{grid-column:2;grid-row:2;overflow:hidden;display:flex;flex-direction:column
             <tr><td>Taper Ratio</td><td id="ttaper">—</td></tr>
             <tr><td>Thickness/Chord</td><td id="ttc">—</td></tr>
             <tr><td>Twist (washout)</td><td id="ttwist">—</td></tr>
-            <tr><td>Twist (washout)</td><td id="ttwist"></td></tr>
-<tr id="row-sweep" style="display:none;"><td>Sweep Angle</td><td id="tsweep"></td></tr>
+            <tr><td>Winglets</td><td id="twinglets">—</td></tr>
             <tr><td>Airfoil</td><td id="tairfoil">—</td></tr>
           </tbody>
         </table>
@@ -825,14 +824,7 @@ function renderResults(d,ak,isFW,warns) {
   document.getElementById('ttaper').textContent    =d.taperratio.toFixed(3);
   document.getElementById('ttc').textContent       =`${(d.tc*100).toFixed(1)}%`;
   document.getElementById('ttwist').textContent    =`${d.twistdeg.toFixed(2)}°`;
-  document.getElementById("twinglets").textContent = d.winglet_pres||0 > 0.5 ? "Yes" : "No"
-const sweepRow = document.getElementById('row-sweep');
-if (isFW && d.sweep_deg > 0) {
-    document.getElementById('tsweep').textContent = d.sweep_deg.toFixed(1) + '°';
-    sweepRow.style.display = '';
-} else {
-    sweepRow.style.display = 'none';
-}
+  document.getElementById('twinglets').textContent =(d.wingletpres||0)>0.5?'Yes':'No';
   document.getElementById('tairfoil').textContent  =d.airfoilname||ak;
   document.getElementById('ald').textContent       =d.ld.toFixed(3);
   document.getElementById('acdo').textContent      =d.CDo.toFixed(5);
