@@ -142,10 +142,10 @@ def analyse(design, cfg, airfoil_key="naca4412"):
     Cl_max = af["Cl_max"]
 
     if fw:
-        C_Do         = Cd_min + (0.005 * tc)
+        C_Do         = (Cd_min * 3.5) + (0.006 * tc)
         trim_penalty = 0.08
     else:
-        C_Do         = Cd_min + (0.006 * tc)
+        C_Do         = (Cd_min * 3.5) + (0.007 * tc)
         trim_penalty = 0.0
 
     k_twist   = max(0.94, 1.0 - (twist * 0.01))
@@ -160,7 +160,7 @@ def analyse(design, cfg, airfoil_key="naca4412"):
     weight         = mass_total * 9.81
 
     stall_speed = math.sqrt((2 * weight) / (1.225 * S * 1.15)) if S > 0 else 10.0
-    range_km    = (cfg.battery_wh * 0.65 * ld * 3.6) / weight if weight > 0 else 0
+    range_km    = (cfg.battery_wh * 0.40 * ld * 3.6) / weight if weight > 0 else 0
     endurance   = range_km / (cfg.cruise_ms * 3.6) if cfg.cruise_ms > 0 else 0
     safety      = max(1.0, (tc * 150.0) / (b + 0.5))
     stability_penalty = max(0.0, (8.0 - AR) * 1.5) if (fw and AR < 8.0) else 0.0
