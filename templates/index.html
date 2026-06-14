@@ -824,12 +824,11 @@ function exportSTL() {
   view.setUint32(80, totalTris, true);
 
   let offset = 84;
-  const {Vector3, Matrix3} = window.T;
+  const {Vector3} = window.T;
 
   meshes.forEach(mesh => {
     const geo = mesh.geometry;
     const pos = geo.attributes.position;
-    const normalMatrix = new Matrix3().getNormalMatrix(mesh.matrixWorld);
     const idx = geo.index;
     const triCount = idx ? idx.count / 3 : pos.count / 3;
 
